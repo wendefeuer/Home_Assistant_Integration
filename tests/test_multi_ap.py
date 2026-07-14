@@ -18,7 +18,7 @@ from custom_components.open_epaper_link.hub_manager import (
 )
 from custom_components.open_epaper_link.util import get_hub_for_tag
 
-TAG = "0000021A7D163B1D"
+TAG = "0011223344556677"
 
 
 @dataclass
@@ -65,49 +65,49 @@ class FakeHass:
 
 def test_freshest_active_ap_is_selected() -> None:
     manager = MultiHubManager(FakeHass())
-    office = FakeHub("office", "192.168.0.143", last_seen=100)
-    cellar = FakeHub("cellar", "192.168.0.166", last_seen=200)
-    manager.register_hub(office)
-    manager.register_hub(cellar)
+    hub_a = FakeHub("hub-a", "192.0.2.143", last_seen=100)
+    hub_b = FakeHub("hub-b", "192.0.2.166", last_seen=200)
+    manager.register_hub(hub_a)
+    manager.register_hub(hub_b)
 
-    assert manager.resolve_tag_hub(TAG) is cellar
-    assert manager.get_tag_data(TAG)["host"] == "192.168.0.166"
+    assert manager.resolve_tag_hub(TAG) is hub_b
+    assert manager.get_tag_data(TAG)["host"] == "192.0.2.166"
 
 
 def test_inactive_duplicate_does_not_steal_route() -> None:
     manager = MultiHubManager(FakeHass())
-    office = FakeHub(
-        "office",
-        "192.168.0.143",
+    hub_a = FakeHub(
+        "hub-a",
+        "192.0.2.143",
         last_seen=300,
         tag_online=False,
     )
-    cellar = FakeHub("cellar", "192.168.0.166", last_seen=200)
-    manager.register_hub(office)
-    manager.register_hub(cellar)
+    hub_b = FakeHub("hub-b", "192.0.2.166", last_seen=200)
+    manager.register_hub(hub_a)
+    manager.register_hub(hub_b)
 
-    assert manager.resolve_tag_hub(TAG) is cellar
+    assert manager.resolve_tag_hub(TAG) is hub_b
 
 
 def test_offline_ap_falls_back_to_active_ap() -> None:
     manager = MultiHubManager(FakeHass())
-    office = FakeHub(
-        "office",
-        "192.168.0.143",
+    hub_a = FakeHub(
+        "hub-a",
+        "192.0.2.143",
         last_seen=500,
         online=False,
     )
-    cellar = FakeHub("cellar", "192.168.0.166", last_seen=100)
-    manager.register_hub(office)
-    manager.register_hub(cellar)
+    hub_b = FakeHub("hub-b", "192.0.2.166", last_seen=100)
+    manager.register_hub(hub_a)
+    manager.register_hub(hub_b)
 
-    assert manager.resolve_tag_hub(TAG) is cellar
+    assert manager.resolve_tag_hub(TAG) is hub_b
 
 
 def test_no_online_ap_fails_closed() -> None:
     manager = MultiHubManager(FakeHass())
     manager.register_hub(
-        FakeHub("office", "192.168.0.143", last_seen=100, online=False)
+        FakeHub("hub-a", "192.0.2.143", last_seen=100, online=False)
     )
 
     with pytest.raises(HomeAssistantError):
@@ -118,29 +118,29 @@ def test_blacklisted_copy_does_not_hide_other_ap() -> None:
     manager = MultiHubManager(FakeHass())
     manager.register_hub(
         FakeHub(
-            "office",
-            "192.168.0.143",
+            "hub-a",
+            "192.0.2.143",
             last_seen=300,
             blacklisted=[TAG],
         )
     )
-    cellar = FakeHub("cellar", "192.168.0.166", last_seen=200)
-    manager.register_hub(cellar)
+    hub_b = FakeHub("hub-b", "192.0.2.166", last_seen=200)
+    manager.register_hub(hub_b)
 
-    assert manager.resolve_tag_hub(TAG) is cellar
-    assert manager.tag_exists_elsewhere(TAG, exclude_entry_id="office")
+    assert manager.resolve_tag_hub(TAG) is hub_b
+    assert manager.tag_exists_elsewhere(TAG, exclude_entry_id="hub-a")
 
 
 def test_service_lookup_uses_manager_route() -> None:
     hass = FakeHass()
     manager = MultiHubManager(hass)
     hass.data["open_epaper_link"] = {"hub_manager": manager}
-    office = FakeHub("office", "192.168.0.143", last_seen=100, tag_online=False)
-    cellar = FakeHub("cellar", "192.168.0.166", last_seen=200)
-    manager.register_hub(office)
-    manager.register_hub(cellar)
+    hub_a = FakeHub("hub-a", "192.0.2.143", last_seen=100, tag_online=False)
+    hub_b = FakeHub("hub-b", "192.0.2.166", last_seen=200)
+    manager.register_hub(hub_a)
+    manager.register_hub(hub_b)
 
-    assert get_hub_for_tag(hass, f"open_epaper_link.{TAG}") is cellar
+    assert get_hub_for_tag(hass, f"open_epaper_link.{TAG}") is hub_b
 
 
 def test_ap_identifiers_are_config_entry_specific() -> None:
@@ -161,7 +161,7 @@ def test_hub_storage_is_config_entry_specific(monkeypatch: pytest.MonkeyPatch) -
     fake_hass = SimpleNamespace(bus=SimpleNamespace())
     entry = SimpleNamespace(
         entry_id="entry-a",
-        data={"host": "192.168.0.166"},
+        data={"host": "192.0.2.166"},
         options={},
     )
     monkeypatch.setattr(coordinator, "Store", FakeStore)
@@ -178,7 +178,7 @@ def test_hub_storage_is_config_entry_specific(monkeypatch: pytest.MonkeyPatch) -
 async def test_ap_reboot_accepts_firmware_read_timeout() -> None:
     """The AP restarts before its reboot HTTP response can be completed."""
     hub = object.__new__(coordinator.Hub)
-    hub.host = "192.168.0.143"
+    hub.host = "192.0.2.143"
     hub._run_ap_command = AsyncMock(
         side_effect=requests.exceptions.ReadTimeout("AP is restarting")
     )

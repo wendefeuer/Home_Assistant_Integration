@@ -1,5 +1,38 @@
 # Changelog
 
+## [3.0.1-multi-ap.1](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.0...3.0.1-multi-ap.1) (2026-07-14)
+
+> **Pre-release:** Test version for broader Multi-AP validation. Back up Home Assistant and the existing integration folder before installation.
+
+### Features
+
+* allow multiple AP config entries while continuing to reject duplicate hosts
+* keep one logical Home Assistant device per physical tag across multiple APs
+* route tag state and actions to an online AP, preferring the freshest `last_seen`
+* create unique AP device identifiers and separate per-entry tag stores
+* add debug logging for routing candidates, the selected AP, and the selection reason
+
+### Bug Fixes
+
+* retain a shared tag when it is deleted or blacklisted on only one AP
+* route `reboot_ap` to the explicitly selected AP device
+* treat an accepted AP reboot followed by the expected connection loss as successful
+
+### Validation
+
+* nine focused Multi-AP tests passed
+* Python compilation and JSON/translation validation passed
+* live validation passed on Home Assistant Core 2026.7.2 with two APs and shared tags
+* AP fallback/recovery, separate AP reboot, and unchanged BLE operation were verified
+* 27 existing image snapshot differences were reproduced unchanged on the upstream code in the same Windows/Pillow environment and are not caused by this beta
+
+### Known limitations
+
+* pre-release from a public fork; not yet merged into the upstream stable release
+* Multi-AP routing covers AP-based tags; BLE paths are intentionally unchanged
+* the selected AP can change when connectivity or tag `last_seen` data changes
+* broader field testing with other AP counts, firmware combinations, and Home Assistant versions is still required
+
 ## [3.0.0](https://github.com/OpenEPaperLink/Home_Assistant_Integration/compare/2.8.0...3.0.0) (2026-03-27)
 
 

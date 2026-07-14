@@ -1,20 +1,20 @@
 ---
-name: Multi-AP beta report
-about: Report a problem or test result for the Multi-AP pre-release
-title: "[Multi-AP beta] "
+name: Multi-AP report
+about: Report a problem or test result for the Multi-AP release
+title: "[Multi-AP] "
 labels: "bug"
 assignees: ""
 ---
 
 ## Before submitting
 
-- Confirm that you are testing `3.0.1-multi-ap.1` or a later Multi-AP pre-release.
+- Confirm that you are using the current Multi-AP release.
 - Search existing issues for the same behavior.
 - Remove passwords, tokens, private IP addresses, tag identifiers, location names, and other personal data from logs and screenshots.
 
 ## Environment
 
-- Multi-AP beta version:
+- Multi-AP release version:
 - Home Assistant version:
 - Installation method (manual/HACS):
 - Number of OpenEPaperLink APs:

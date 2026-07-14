@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.0.1](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.1-multi-ap.1...3.0.1) (2026-07-14)
+
+### Release
+
+* promote the validated Multi-AP beta to the stable `3.0.1` fork release
+* no functional code changes compared with `3.0.1-multi-ap.1`
+* retain the backup, rollback, known-limitations, and sanitized issue-reporting guidance
+
+### Validation
+
+* nine focused Multi-AP tests passed
+* Python 3.12 compilation and JSON/translation validation passed
+* live validation passed on Home Assistant Core 2026.7.2 with two APs and shared tags
+* AP fallback/recovery, separate AP reboot, and unchanged BLE operation were verified
+
 ## [3.0.1-multi-ap.1](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.0...3.0.1-multi-ap.1) (2026-07-14)
 
 > **Pre-release:** Test version for broader Multi-AP validation. Back up Home Assistant and the existing integration folder before installation.

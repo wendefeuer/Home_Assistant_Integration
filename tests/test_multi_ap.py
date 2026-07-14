@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
+import requests
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -170,3 +172,15 @@ def test_hub_storage_is_config_entry_specific(monkeypatch: pytest.MonkeyPatch) -
     assert hub.storage_key == "open_epaper_link_tags_entry-a"
     assert "open_epaper_link_tags_entry-a" in stores
     assert "open_epaper_link_tags" in stores
+
+
+@pytest.mark.asyncio
+async def test_ap_reboot_accepts_firmware_read_timeout() -> None:
+    """The AP restarts before its reboot HTTP response can be completed."""
+    hub = object.__new__(coordinator.Hub)
+    hub.host = "192.168.0.143"
+    hub._run_ap_command = AsyncMock(
+        side_effect=requests.exceptions.ReadTimeout("AP is restarting")
+    )
+
+    assert await hub.reboot_ap()

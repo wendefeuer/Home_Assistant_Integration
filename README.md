@@ -160,7 +160,11 @@ For any issues, the `#atc_ble_oepl` and `#home_assistant` channel on the [OpenEP
 Once flashed and configured, tags are discovered by HA automatically.
 
 ### Option 1: HACS Installation (Recommended)
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=wendefeuer&repository=Home_Assistant_Integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=wendefeuer&repository=Home_Assistant_Integration&category=integration)
+
+If the button does not add the repository, open **HACS → three-dot menu → Custom repositories** and add `https://github.com/wendefeuer/Home_Assistant_Integration` with category **Integration**.
+
+Falls die Schaltfläche das Repository nicht hinzufügt, in **HACS → Drei-Punkte-Menü → Benutzerdefinierte Repositories** die Adresse `https://github.com/wendefeuer/Home_Assistant_Integration` mit der Kategorie **Integration** eintragen.
 
 ### Option 2: Manual Installation
 1. Download the `open_epaper_link` folder from the [latest release](https://github.com/wendefeuer/Home_Assistant_Integration/releases/latest)

@@ -20,10 +20,10 @@
       "hostname": "openepaperlink-*"
     }
   ],
-  "documentation": "https://github.com/OpenEPaperLink/Home_Assistant_Integration",
+  "documentation": "https://github.com/wendefeuer/Home_Assistant_Integration",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/OpenEPaperLink/Home_Assistant_Integration/issues",
+  "issue_tracker": "https://github.com/wendefeuer/Home_Assistant_Integration/issues",
   "requirements": [
     "qrcode[pil]==7.4.2",
     "requests_toolbelt==1.0.0",
@@ -35,5 +35,5 @@
     "numpy>=1.26.4",
     "Pillow>=10.4.0"
   ],
-  "version": "3.0.1"
+  "version": "3.0.2"
 }

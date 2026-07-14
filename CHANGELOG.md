@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.0.2](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.1...3.0.2) (2026-07-14)
+
+### Bug Fixes
+
+* point the HACS installation button to `wendefeuer/Home_Assistant_Integration`
+* point release, issue, manual-download, documentation, and issue-tracker links to the public fork
+* publish the validated Multi-AP implementation on the fork's default `main` branch
+
+### Validation
+
+* no functional integration code changes compared with `3.0.1`
+* nine focused Multi-AP tests passed
+* Python 3.12 compilation, JSON/translation validation, and repository secret scanning passed
+
 ## [3.0.1](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.1-multi-ap.1...3.0.1) (2026-07-14)
 
 ### Release

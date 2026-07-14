@@ -8,14 +8,14 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from .coordinator import Hub
 from .ble import BLEConnectionError, BLETimeoutError, BLEProtocolError
 from .const import DOMAIN, SIGNAL_TAG_IMAGE_UPDATE
 from .imagegen import ImageGen
 from .tag_types import get_tag_types_manager
 from .upload import create_upload_queues, DITHER_DEFAULT, upload_to_ble_block, upload_to_hub
-from .util import is_ble_entry, get_hub_from_hass, rgb_to_rgb332, int_to_hex_string, \
+from .util import get_hub_for_tag, rgb_to_rgb332, int_to_hex_string, \
     is_ble_device, get_mac_from_entity_id
+from .hub_manager import AP_IDENTIFIER_PREFIX, get_hub_manager
 
 _LOGGER: Final = logging.getLogger(__name__)
 
@@ -74,8 +74,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"device_id": device_id},
             )
 
-        domain_mac = next(iter(device.identifiers))
-        if domain_mac[0] != DOMAIN:
+        domain_mac = next(
+            (
+                identifier
+                for identifier in device.identifiers
+                if identifier[0] == DOMAIN
+                and not identifier[1].startswith(AP_IDENTIFIER_PREFIX)
+            ),
+            None,
+        )
+        if domain_mac is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="device_not_oepl",
@@ -127,52 +135,33 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
 
-    def require_hub_online(func: Callable) -> Callable:
-        """Decorator to require the AP to be online before executing a service."""
-        @wraps(func)
-        async def wrapper(service: ServiceCall, *args, **kwargs) -> None:
-            hub = get_hub_from_hass(hass)
-            if not hub.online:
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="ap_offline",
-                )
-            return await func(service, *args, hub=hub, **kwargs)
-        return wrapper
+    async def get_target_device_ids(service: ServiceCall) -> list[str]:
+        """Expand device, label, and area targets into unique device IDs."""
+        device_ids = service.data.get("device_id", [])
+        label_ids = service.data.get("label_id", [])
+        area_ids = service.data.get("area_id", [])
+
+        if isinstance(device_ids, str):
+            device_ids = [device_ids]
+        else:
+            device_ids = list(device_ids)
+        if isinstance(label_ids, str):
+            label_ids = [label_ids]
+        if isinstance(area_ids, str):
+            area_ids = [area_ids]
+
+        for label_id in label_ids:
+            device_ids.extend(await get_device_ids_from_label_id(label_id))
+        for area_id in area_ids:
+            device_ids.extend(await get_device_ids_from_area_id(area_id))
+
+        return list(dict.fromkeys(device_ids))
 
     def handle_targets(func: Callable) -> Callable:
         """Decorator to handle device_id, label_id, and area_id targeting."""
         @wraps(func)
         async def wrapper(service: ServiceCall, *args, **kwargs):
-            device_ids = service.data.get("device_id", [])
-            label_ids = service.data.get("label_id", [])
-            area_ids = service.data.get("area_id", [])
-
-            # Normalize to lists
-            if isinstance(device_ids, str):
-                device_ids = [device_ids]
-            if isinstance(label_ids, str):
-                label_ids = [label_ids]
-            if isinstance(area_ids, str):
-                area_ids = [area_ids]
-
-            # Expand labels
-            for label_id in label_ids:
-                expanded = await get_device_ids_from_label_id(label_id)
-                device_ids.extend(expanded)
-
-            # Expand areas
-            for area_id in area_ids:
-                expanded = await get_device_ids_from_area_id(area_id)
-                device_ids.extend(expanded)
-
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_device_ids = []
-            for device_id in device_ids:
-                if device_id not in seen:
-                    seen.add(device_id)
-                    unique_device_ids.append(device_id)
+            unique_device_ids = await get_target_device_ids(service)
 
             if not unique_device_ids:
                 raise ServiceValidationError(
@@ -238,12 +227,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # For hub devices, ensure hub is online
             hub = None
             if not is_ble:
-                hub = get_hub_from_hass(hass)
-                if not hub.online:
-                    raise HomeAssistantError(
-                        translation_domain=DOMAIN,
-                        translation_key="ap_offline",
-                    )
+                hub = get_hub_for_tag(hass, entity_id)
 
             # Generate image
             generator = ImageGen(hass)
@@ -328,41 +312,66 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
 
 
-    @require_hub_online
     @handle_targets
-    async def setled_service(service: ServiceCall, entity_id: str, hub: Hub) -> None:
+    async def setled_service(service: ServiceCall, entity_id: str) -> None:
+        hub = get_hub_for_tag(hass, entity_id)
         pattern = _build_led_pattern(service.data)
 
         await hub.set_led_pattern(entity_id, pattern)
 
-    @require_hub_online
     @handle_targets
-    async def clear_pending_service(service: ServiceCall, entity_id: str, hub: Hub) -> None:
+    async def clear_pending_service(service: ServiceCall, entity_id: str) -> None:
         """Clear pending updates for target devices."""
+        hub = get_hub_for_tag(hass, entity_id)
         await hub.send_tag_cmd(entity_id, "clear")
 
-    @require_hub_online
     @handle_targets
-    async def force_refresh_service(service: ServiceCall, entity_id: str, hub: Hub) -> None:
+    async def force_refresh_service(service: ServiceCall, entity_id: str) -> None:
         """Force refresh target devices."""
+        hub = get_hub_for_tag(hass, entity_id)
         await hub.send_tag_cmd(entity_id, "refresh")
 
-    @require_hub_online
     @handle_targets
-    async def reboot_tag_service(service: ServiceCall,entity_id: str, hub: Hub) -> None:
+    async def reboot_tag_service(service: ServiceCall,entity_id: str) -> None:
         """Reboot target devices."""
+        hub = get_hub_for_tag(hass, entity_id)
         await hub.send_tag_cmd(entity_id, "reboot")
 
-    @require_hub_online
     @handle_targets
-    async def scan_channels_service(service: ServiceCall, entity_id: str, hub: Hub) -> None:
+    async def scan_channels_service(service: ServiceCall, entity_id: str) -> None:
         """Trigger channel scan on target devices."""
+        hub = get_hub_for_tag(hass, entity_id)
         await hub.send_tag_cmd(entity_id, "scan")
 
-    @require_hub_online
-    async def reboot_ap_service(service: ServiceCall, hub: Hub) -> None:
-        """Reboot the Access Point."""
-        await hub.reboot_ap()
+    async def reboot_ap_service(service: ServiceCall) -> None:
+        """Reboot the explicitly targeted access point or points."""
+        device_ids = await get_target_device_ids(service)
+        if not device_ids:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_targets_specified",
+            )
+
+        manager = get_hub_manager(hass)
+        errors: list[str] = []
+        for device_id in device_ids:
+            try:
+                hub = manager.resolve_ap_device(device_id)
+                if not hub.online:
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN,
+                        translation_key="ap_offline",
+                    )
+                await hub.reboot_ap()
+            except (ServiceValidationError, HomeAssistantError) as err:
+                errors.append(f"{device_id}: {err}")
+
+        if errors:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="multiple_errors",
+                translation_placeholders={"errors": "\n".join(errors)},
+            )
 
     async def refresh_tag_types_service(service: ServiceCall) -> None:
         """Force refresh tag types from GitHub."""

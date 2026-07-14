@@ -33,7 +33,6 @@
       "invalid_device_config": "Gerät hat ungültige Konfigurationsdaten zurückgegeben. Bitte Gerät neu konfigurieren oder die Firmware aktualisieren."
     },
     "abort": {
-      "single_instance_allowed": "Nur ein OpenEPaperLink-Hub kann konfiguriert werden. Mehrere BLE-Geräte werden unterstützt, aber nur ein AP-Hub ist erlaubt.",
       "unsupported_protocol": "Nicht unterstütztes BLE-Firmware-Protokoll. Nur ATC- und OEPL-Firmware werden unterstützt.",
       "invalid_advertising_data": "Advertising-Daten des Geräts konnten nicht analysiert werden. Bitte sicherstellen, dass das Gerät eine kompatible Firmware verwendet.",
       "no_reconfigure_ble": "BLE-Geräte unterstützen keine Neukonfiguration. Gerät entfernen und erneut hinzufügen, wenn Einstellungen geändert werden sollen.",
@@ -444,6 +443,11 @@
     "tagtypes_load_failed": "Tag-Typ-Definitionen konnten nicht geladen werden. Keine gespeicherten Daten verfügbar. Netzwerkverbindung oder GitHub-Zugriff prüfen.",
     "tagtypes_refresh_failed": "Tag-Typ-Definitionen konnten nicht aktualisiert werden. Netzwerkverbindung oder GitHub-Zugriff prüfen.",
     "no_hub_configured": "Kein AP-Hub konfiguriert. Nur BLE-Geräte gefunden.",
+    "hub_target_required": "Mehrere APs sind konfiguriert. Ein Tag- oder AP-Ziel auswählen, damit OpenEPaperLink die Aktion korrekt zuordnen kann.",
+    "ap_entry_not_loaded": "Der OpenEPaperLink-AP-Konfigurationseintrag {entry_id} ist nicht geladen.",
+    "device_not_ap": "Gerät {device_id} ist kein OpenEPaperLink-Access-Point.",
+    "tag_no_online_ap": "Kein online erreichbarer Access Point meldet Tag {tag_mac} derzeit als aktiv. Mögliche APs: {candidate_hosts}.",
+    "tag_not_registered_any_ap": "Tag {tag_mac} ist auf keinem geladenen OpenEPaperLink-Access-Point registriert.",
     "ble_slots_unavailable": "Keine verfügbaren Bluetooth-Verbindungsslots für {mac_address}. Weitere ESPHome-Bluetooth-Proxys in der Nähe hinzufügen oder auf freie Verbindungen warten. Details: {error}.",
     "ble_device_not_found": "Gerät {mac_address} nicht gefunden.",
     "ble_characteristic_not_resolved": "Charakteristik für Service {service_uuid} konnte nicht aufgelöst werden.",

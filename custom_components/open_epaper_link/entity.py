@@ -4,11 +4,13 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import bluetooth
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, Entity
 from .ble import BLEDeviceMetadata
 
 from .const import DOMAIN, ATC_CONFIG_URL
+from .hub_manager import ap_identifier, get_hub_manager
 from .tag_types import get_hw_string, get_hw_dimensions
 
 if TYPE_CHECKING:
@@ -40,8 +42,8 @@ class OpenEPaperLinkAPEntity(Entity):
     def device_info(self) -> DeviceInfo:
         """Return device info for the AP."""
         return DeviceInfo(
-            identifiers={(DOMAIN, "ap")},
-            name="OpenEPaperLink AP",
+            identifiers={(DOMAIN, ap_identifier(self._hub.entry.entry_id))},
+            name=f"OpenEPaperLink AP ({self._hub.host})",
             model=self._hub.ap_model,
             manufacturer="OpenEPaperLink",
             configuration_url=f"http://{self._hub.host}"
@@ -92,13 +94,25 @@ class OpenEPaperLinkTagEntity(Entity):
 
     def __init__(self, hub: Hub, tag_mac: str) -> None:
         """Initialize the tag entity."""
-        self._hub = hub
+        self._initial_hub = hub
+        self._hub_manager = get_hub_manager(hub.hass)
         self._tag_mac = tag_mac
+
+    @property
+    def _hub(self) -> Hub:
+        """Return the freshest hub for this logical tag."""
+        try:
+            return self._hub_manager.resolve_tag_hub(
+                self._tag_mac, require_online=False
+            )
+        except HomeAssistantError:
+            # Entity construction can happen before all hubs are registered.
+            return self._initial_hub
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for the tag."""
-        tag_data = self._hub.get_tag_data(self._tag_mac)
+        tag_data = self._hub_manager.get_tag_data(self._tag_mac)
         tag_name = tag_data.get("tag_name", self._tag_mac)
         hw_type = tag_data.get("hw_type", 0)
         hw_string = get_hw_string(hw_type)
@@ -110,7 +124,6 @@ class OpenEPaperLinkTagEntity(Entity):
             name=tag_name,
             manufacturer="OpenEPaperLink",
             model=hw_string,
-            via_device=(DOMAIN, "ap"),
             sw_version=f"0x{int(firmware_version, 16):X}" if firmware_version else "Unknown",
             serial_number=self._tag_mac,
             hw_version=f"{width}x{height}",
@@ -119,11 +132,7 @@ class OpenEPaperLinkTagEntity(Entity):
     @property
     def available(self) -> bool:
         """Return if the entity is available."""
-        return (
-                self._hub.online
-                and self._hub.is_tag_online(self._tag_mac)
-                and self._tag_mac not in self._hub.get_blacklisted_tags()
-        )
+        return self._hub_manager.is_tag_available(self._tag_mac)
 
     async def async_added_to_hass(self) -> None:
         """Register update signal handlers."""

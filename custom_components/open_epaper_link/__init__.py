@@ -14,6 +14,7 @@ from homeassistant.helpers.typing import ConfigType
 from .ble import BLEDeviceMetadata
 from .const import DOMAIN
 from .coordinator import Hub
+from .hub_manager import get_hub_manager
 from .runtime_data import OpenEPaperLinkConfigEntry, OpenEPaperLinkBLERuntimeData
 from .services import async_setup_services
 from .tag_types import get_tag_types_manager
@@ -107,6 +108,8 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     Version 2 -> 3: Add device type and protocol type fields to BLE entries and fix boolean rotate buffer.
 
     Version 3 -> 4: Fix color support.
+
+    Version 4 -> 5: Enable multi-AP runtime and AP-specific storage.
 
     Returns:
         bool: True if migration was successful, False otherwise.
@@ -223,6 +226,10 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             version=4
         )
         _LOGGER.info("Successfully migrated config entry to version 4")
+
+    if config_entry.version == 4:
+        hass.config_entries.async_update_entry(config_entry, version=5)
+        _LOGGER.info("Successfully migrated config entry to multi-AP schema version 5")
 
     return True
 
@@ -430,6 +437,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
         await hub.async_setup_initial()
 
         entry.runtime_data = hub
+        get_hub_manager(hass).register_hub(hub)
 
         removed_entities = await async_migrate_camera_entities(hass, entry)
         if removed_entities:
@@ -448,6 +456,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
             )
 
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        await async_cleanup_legacy_ap_device(hass)
 
         async def start_websocket(_):
             """Start WebSocket connection after HA is fully started."""
@@ -515,6 +524,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEnt
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
         if unload_ok:
+            get_hub_manager(hass).unregister_hub(entry.entry_id)
             await hub.shutdown()
 
     return unload_ok
@@ -546,6 +556,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         hass: Home Assistant instance
         entry: Configuration entry being removed
     """
+    if CONF_HOST in entry.data:
+        await storage.async_remove_store(hass, f"{DOMAIN}_tags_{entry.entry_id}")
+
     # Only remove shared storage files if this is the last config entry
     remaining_entries = [
         config_entry for config_entry in hass.config_entries.async_entries(DOMAIN)
@@ -622,6 +635,28 @@ async def async_remove_storage_files(hass: HomeAssistant) -> None:
     # Reset the tag types manager singleton since its storage was deleted
     reset_tag_types_manager()
     _LOGGER.debug("Reset tag types manager singleton")
+
+
+async def async_cleanup_legacy_ap_device(hass: HomeAssistant) -> None:
+    """Remove the old globally identified AP device once it is orphaned."""
+    device_registry = dr.async_get(hass)
+    legacy_device = device_registry.async_get_device(identifiers={(DOMAIN, "ap")})
+    if legacy_device is None:
+        return
+
+    entity_registry = er.async_get(hass)
+    if any(
+        entity.device_id == legacy_device.id
+        for entity in entity_registry.entities.values()
+    ):
+        _LOGGER.debug(
+            "Legacy AP device %s still owns entities; deferring cleanup",
+            legacy_device.id,
+        )
+        return
+
+    device_registry.async_remove_device(legacy_device.id)
+    _LOGGER.info("Removed orphaned legacy OpenEPaperLink AP device")
 
 
 

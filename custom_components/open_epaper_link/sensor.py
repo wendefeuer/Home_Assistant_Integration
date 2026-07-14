@@ -30,6 +30,7 @@ from . import Hub
 from .entity import OpenEPaperLinkTagEntity, OpenEPaperLinkAPEntity, OpenEPaperLinkBLEEntity
 from .runtime_data import OpenEPaperLinkConfigEntry
 from .const import DOMAIN
+from .hub_manager import get_hub_manager
 from .util import is_ble_entry
 from .tag_types import get_hw_string, get_hw_dimensions
 
@@ -646,6 +647,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
     
     # Traditional AP setup
     hub = entry_data  # For AP entries, entry_data is the Hub instance
+    hub_manager = get_hub_manager(hass)
 
     # Set up AP sensors
     ap_sensors = [OpenEPaperLinkAPSensor(hub, description) for description in AP_SENSOR_TYPES]
@@ -662,6 +664,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
         Args:
             tag_mac: MAC address of the newly discovered tag
         """
+        if not hub_manager.is_tag_entity_owner(entry.entry_id, tag_mac):
+            return
+
         entities = []
 
         tag_data = hub.get_tag_data(tag_mac)

@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .runtime_data import OpenEPaperLinkBLERuntimeData
+from .hub_manager import get_hub_manager, normalize_tag_mac
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ def get_image_path(hass: HomeAssistant, entity_id: str) -> str:
     return hass.config.path("www/open_epaper_link/open_epaper_link." + str(entity_id).lower() + ".jpg")
 
 
-def get_hub_from_hass(hass: HomeAssistant):
+def get_hub_from_hass(hass: HomeAssistant, tag_mac: str | None = None):
     """
     Get the AP Hub instance from config entries.
 
@@ -83,14 +84,35 @@ def get_hub_from_hass(hass: HomeAssistant):
     Raises:
         HomeAssistantError: If no AP hub is configured
     """
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if hasattr(entry, 'runtime_data') and entry.runtime_data is not None:
-            if not isinstance(entry.runtime_data, OpenEPaperLinkBLERuntimeData):
-                return entry.runtime_data
+    manager = get_hub_manager(hass)
+    if tag_mac is not None:
+        return manager.resolve_tag_hub(normalize_tag_mac(tag_mac))
+
+    hubs = manager.hubs
+    if len(hubs) == 1:
+        return hubs[0]
+
+    if len(hubs) > 1:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="hub_target_required",
+        )
 
     raise HomeAssistantError(
         translation_domain=DOMAIN,
         translation_key="no_hub_configured",
+    )
+
+
+def get_hub_for_tag(hass: HomeAssistant, entity_id_or_mac: str, *, require_online: bool = True):
+    """Resolve the active AP for a tag entity ID or MAC address."""
+    tag_mac = (
+        get_mac_from_entity_id(entity_id_or_mac)
+        if "." in entity_id_or_mac
+        else normalize_tag_mac(entity_id_or_mac)
+    )
+    return get_hub_manager(hass).resolve_tag_hub(
+        tag_mac, require_online=require_online
     )
 
 

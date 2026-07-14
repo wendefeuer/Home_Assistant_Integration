@@ -33,7 +33,6 @@
       "invalid_device_config": "O dispositivo retornou dados de configuração inválidos. Por favor, reconfigure o dispositivo ou atualize o firmware."
     },
     "abort": {
-      "single_instance_allowed": "Apenas um hub OpenEPaperLink pode ser configurado. Múltiplos dispositivos BLE são suportados, mas apenas um hub AP é permitido.",
       "unsupported_protocol": "Protocolo de firmware BLE não suportado. Apenas firmware ATC são suportados.",
       "invalid_advertising_data": "Não foi possível analisar os dados de advertising do dispositivo. Por favor, certifique-se de que o dispositivo está usando firmware compatível.",
       "no_reconfigure_ble": "Dispositivos BLE não suportam reconfiguração. Remova e adicione o dispositivo novamente se precisar alterar suas definições.",
@@ -335,6 +334,11 @@
     "tagtypes_load_failed": "Não foi possível carregar definições de tipos de tag. Nenhum dado armazenado disponível. Verifique conectividade de rede ou acesso ao GitHub.",
     "tagtypes_refresh_failed": "Não foi possível atualizar definições de tipos de tag. Verifique conectividade de rede ou acesso ao GitHub.",
     "no_hub_configured": "Nenhum hub AP configurado. Apenas dispositivos BLE encontrados.",
+    "hub_target_required": "Mais de um AP está configurado. Selecione uma tag ou um AP para encaminhar a ação corretamente.",
+    "ap_entry_not_loaded": "A entrada de configuração do AP OpenEPaperLink {entry_id} não está carregada.",
+    "device_not_ap": "O dispositivo {device_id} não é um ponto de acesso OpenEPaperLink.",
+    "tag_no_online_ap": "Nenhum AP online informa a tag {tag_mac} como ativa. APs candidatos: {candidate_hosts}.",
+    "tag_not_registered_any_ap": "A tag {tag_mac} não está registrada em nenhum AP OpenEPaperLink carregado.",
     "ble_slots_unavailable": "Sem slots de conexão Bluetooth disponíveis para {mac_address}. Adicione mais proxies Bluetooth ESPHome próximos ou aguarde conexões liberarem. Detalhes: {error}.",
     "ble_device_not_found": "Dispositivo {mac_address} não encontrado.",
     "ble_characteristic_not_resolved": "Não foi possível resolver a característica para o serviço {service_uuid}.",

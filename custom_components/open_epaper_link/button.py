@@ -17,6 +17,7 @@ from .runtime_data import OpenEPaperLinkConfigEntry
 from .tag_types import get_tag_types_manager
 from .util import is_ble_entry
 from .const import DOMAIN
+from .hub_manager import get_hub_manager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
 
     # AP device setup (original logic)
     hub = entry_data
+    hub_manager = get_hub_manager(hass)
 
     # Track added tags to prevent duplicates
     added_tags = set()
@@ -85,9 +87,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
             tag_mac: MAC address of the tag to create buttons for
         """
 
-        # Skip if tag is blacklisted
-        if tag_mac in hub.get_blacklisted_tags():
-            _LOGGER.debug("Skipping button creation for blacklisted tag: %s", tag_mac)
+        if not hub_manager.is_tag_entity_owner(entry.entry_id, tag_mac):
+            return
+
+        # Skip only when no AP exposes an eligible copy of the tag.
+        if not hub_manager.hubs_for_tag(tag_mac):
+            _LOGGER.debug("Skipping button creation for unavailable tag: %s", tag_mac)
             return
 
         if tag_mac in added_tags:
@@ -145,6 +150,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
                 if device:
                     for identifier in device.identifiers:
                         if identifier[0] == DOMAIN and identifier[1] in hub.get_blacklisted_tags():
+                            if hub_manager.hubs_for_tag(identifier[1]):
+                                continue
                             entities_to_remove.append(entity.entity_id)
                             # Add device to removal list
                             devices_to_remove.add(device.id)

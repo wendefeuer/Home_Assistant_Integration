@@ -10,7 +10,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from ..const import DOMAIN
 from ..tag_types import TagType, get_tag_types_manager
-from ..util import get_hub_from_hass
+from ..util import get_hub_for_tag
 from ..runtime_data import OpenEPaperLinkBLERuntimeData
 
 from .types import ElementType, DrawingContext
@@ -107,8 +107,8 @@ class ImageGen:
         """
 
         try:
-            # Get hub instance
-            hub = get_hub_from_hass(self.hass)
+            # Route this logical tag to the AP that currently reports it online.
+            hub = get_hub_for_tag(self.hass, entity_id)
             if not hub.online:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,

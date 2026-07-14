@@ -142,7 +142,7 @@ After setup, you can configure additional options through the integration's opti
 **AP Device Configuration:**
 - **Automatic Discovery** (recommended): APs are automatically discovered via DHCP when connected to the network
 - **Manual Setup** (fallback): Go to Settings → Integrations → Add Integration and enter your AP's IP address
-- ⚠️ **Single Hub Limitation**: Only one AP hub allowed per Home Assistant instance
+- **Multiple AP hubs supported**: Add every AP separately. A physical tag remains one logical Home Assistant device; actions are routed to the online AP with the freshest tag check-in.
 - All tags connected to the AP are automatically discovered
 
 **BLE Device Discovery:**

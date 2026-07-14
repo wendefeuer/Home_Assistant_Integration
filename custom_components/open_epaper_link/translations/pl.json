@@ -33,7 +33,6 @@
       "invalid_device_config": "Urządzenie zwróciło nieprawidłowe dane konfiguracyjne. Skonfiguruj urządzenie ponownie lub zaktualizuj jego firmware."
     },
     "abort": {
-      "single_instance_allowed": "Tylko jeden hub OpenEPaperLink może być skonfigurowany. Obsługiwanych jest wiele urządzeń BLE, ale tylko jeden hub AP.",
       "unsupported_protocol": "Nieobsługiwany protokół firmware BLE. Obsługiwane są tylko ATC i OEPL.",
       "invalid_advertising_data": "Nie można przetworzyć danych reklamowych urządzenia. Upewnij się, że urządzenie używa kompatybilnego firmware.",
       "no_reconfigure_ble": "Urządzenia BLE nie obsługują rekonfiguracji. Usuń i dodaj urządzenie ponownie, jeśli potrzebna jest zmiana ustawień.",
@@ -463,6 +462,11 @@
     "no_hub_configured": {
       "message": "Brak skonfigurowanego huba AP. Znaleziono tylko urządzenia BLE."
     },
+    "hub_target_required": { "message": "Skonfigurowano więcej niż jeden AP. Wybierz tag lub AP, aby akcja mogła zostać poprawnie przekierowana." },
+    "ap_entry_not_loaded": { "message": "Wpis konfiguracji AP OpenEPaperLink {entry_id} nie jest załadowany." },
+    "device_not_ap": { "message": "Urządzenie {device_id} nie jest punktem dostępowym OpenEPaperLink." },
+    "tag_no_online_ap": { "message": "Żaden AP online nie zgłasza tagu {tag_mac} jako aktywnego. Kandydaci: {candidate_hosts}." },
+    "tag_not_registered_any_ap": { "message": "Tag {tag_mac} nie jest zarejestrowany w żadnym załadowanym AP OpenEPaperLink." },
     "ble_slots_unavailable": {
       "message": "Brak dostępnych slotów połączeń Bluetooth dla {mac_address}. Dodaj więcej proxy Bluetooth ESPHome w pobliżu lub poczekaj na zwolnienie połączeń. Szczegóły: {error}."
     },

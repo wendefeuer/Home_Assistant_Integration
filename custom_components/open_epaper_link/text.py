@@ -15,6 +15,7 @@ from .entity import OpenEPaperLinkAPEntity, OpenEPaperLinkTagEntity
 from .runtime_data import OpenEPaperLinkConfigEntry
 
 from .const import DOMAIN
+from .hub_manager import get_hub_manager
 
 import logging
 
@@ -193,6 +194,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
         async_add_entities: Callback to register new entities
     """
     hub = entry.runtime_data
+    hub_manager = get_hub_manager(hass)
 
     # Wait for initial AP config to be loaded
     if not hub.ap_config:
@@ -206,7 +208,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
 
     # Add tag name/alias text entities
     for tag_mac in hub.tags:
-        if tag_mac not in hub.get_blacklisted_tags():
+        if (
+            hub_manager.is_tag_entity_owner(entry.entry_id, tag_mac)
+            and hub_manager.hubs_for_tag(tag_mac)
+        ):
             entities.append(TagNameText(hub, tag_mac))
 
     async_add_entities(entities)
@@ -223,7 +228,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
         Args:
             tag_mac: MAC address of the newly discovered tag
         """
-        if tag_mac not in hub.get_blacklisted_tags():
+        if (
+            hub_manager.is_tag_entity_owner(entry.entry_id, tag_mac)
+            and hub_manager.hubs_for_tag(tag_mac)
+        ):
             async_add_entities([TagNameText(hub, tag_mac)])
 
     entry.async_on_unload(

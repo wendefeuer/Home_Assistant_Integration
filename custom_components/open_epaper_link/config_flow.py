@@ -50,7 +50,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     context between user interactions.
     """
 
-    VERSION = 4
+    VERSION = 5
 
     def __init__(self) -> None:
         """Initialize flow."""
@@ -108,11 +108,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             FlowResult: Result of the flow step, either showing the form
                        again (with errors if applicable) or creating an entry
         """
-        # Check for existing AP hub entries immediately (before showing form)
-        for entry_id, entry_data in self.hass.data.get(DOMAIN, {}).items():
-            if not is_ble_entry(entry_data):  # This is an AP (Hub object)
-                return self.async_abort(reason="single_instance_allowed")
-        
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -392,12 +387,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Extract host IP from discovery info
         host = discovery_info.ip
-
-        # Check for existing AP entries in config entries
-        # AP entries have CONF_HOST in data, BLE entries have device_type
-        for entry in self._async_current_entries():
-            if CONF_HOST in entry.data:
-                return self.async_abort(reason="single_instance_allowed")
 
         # Set unique_id to IP address (same as manual setup)
         # This ensures DHCP and manual discoveries are treated as the same entry

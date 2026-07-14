@@ -20,13 +20,14 @@ from homeassistant.helpers import entity_registry as er
 import logging
 
 from .const import DOMAIN, SIGNAL_AP_UPDATE, SIGNAL_TAG_UPDATE, SIGNAL_TAG_IMAGE_UPDATE
+from .hub_manager import get_hub_manager
 from .tag_types import get_tag_types_manager, get_hw_string
 
 _LOGGER: Final = logging.getLogger(__name__)
 
 
 STORAGE_VERSION = 1
-STORAGE_KEY = f"{DOMAIN}_tags"
+LEGACY_STORAGE_KEY = f"{DOMAIN}_tags"
 RECONNECT_INTERVAL = 30
 SAVE_DELAY = 10
 WEBSOCKET_TIMEOUT = 60
@@ -90,8 +91,12 @@ class Hub:
         self._session = async_get_clientsession(hass)
         self._shutdown_handler: CALLBACK_TYPE | None = None
         self._shutdown = asyncio.Event()
+        self.storage_key = f"{DOMAIN}_tags_{entry.entry_id}"
         self._store = Store[dict[str, any]](
-            hass, STORAGE_VERSION, STORAGE_KEY, private=True, atomic_writes=True
+            hass, STORAGE_VERSION, self.storage_key, private=True, atomic_writes=True
+        )
+        self._legacy_store = Store[dict[str, any]](
+            hass, STORAGE_VERSION, LEGACY_STORAGE_KEY, private=True, atomic_writes=True
         )
         self._data: dict[str, dict] = {}
         self._ap_data: dict[str, any] = {}
@@ -162,6 +167,16 @@ class Hub:
         """
         # Load stored data
         stored = await self._store.async_load()
+        if stored is None:
+            # Version 3 used one shared store for every AP. It is safe to use
+            # this only as migration input; async_load_all_tags filters the
+            # data against the inventory actually returned by this AP.
+            stored = await self._legacy_store.async_load()
+            if stored:
+                _LOGGER.info(
+                    "Migrating legacy tag cache to AP-specific storage %s",
+                    self.storage_key,
+                )
         if stored:
             self._data = stored.get("tags", {})
             self._known_tags = set(self._data.keys())
@@ -895,6 +910,16 @@ class Hub:
             # Get all tag data from AP
             all_tags = await self._fetch_all_tags_from_ap()
 
+            # Never retain legacy or cached tags that are not in this AP's
+            # current inventory. This prevents cross-AP cache contamination.
+            actual_macs = {tag_mac.upper() for tag_mac in all_tags}
+            self._data = {
+                tag_mac: data
+                for tag_mac, data in self._data.items()
+                if tag_mac.upper() in actual_macs
+            }
+            self._known_tags = set(self._data)
+
             # Process each tag using the common helper function
             for tag_mac, tag_data in all_tags.items():
                 # Process tag with the initial load flag set
@@ -999,6 +1024,19 @@ class Hub:
 
             # Notify that this tag has been removed
             async_dispatcher_send(self.hass, f"{SIGNAL_TAG_UPDATE}_{tag_mac}")
+
+            # Preserve the logical HA device while another AP still exposes
+            # the same tag.
+            manager = get_hub_manager(self.hass)
+            if manager.tag_exists_elsewhere(
+                tag_mac, exclude_entry_id=self.entry.entry_id
+            ):
+                _LOGGER.info(
+                    "Keeping logical tag %s because another AP still exposes it",
+                    tag_mac,
+                )
+                await self._store.async_save({"tags": self._data})
+                return
 
             # Remove related devices and entities
             device_registry = dr.async_get(self.hass)

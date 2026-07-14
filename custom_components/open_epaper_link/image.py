@@ -12,6 +12,7 @@ from .util import is_ble_entry
 from .entity import OpenEPaperLinkTagEntity, OpenEPaperLinkBLEEntity
 from .runtime_data import OpenEPaperLinkConfigEntry
 from .const import DOMAIN, SIGNAL_TAG_IMAGE_UPDATE
+from .hub_manager import get_hub_manager
 from homeassistant.components.image import ImageEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -45,18 +46,22 @@ async def async_setup_entry(
         return True
 
     hub = entry.runtime_data
+    hub_manager = get_hub_manager(hass)
 
     # Track added image entities to prevent duplicates
     added_image_entities = set()
 
     async def async_add_image_entity(tag_mac: str) -> None:
 
+        if not hub_manager.is_tag_entity_owner(entry.entry_id, tag_mac):
+            return
+
         # Skip if image entity already exists
         if tag_mac in added_image_entities:
             return
 
         # Skip if tag is blacklisted
-        if tag_mac in hub.get_blacklisted_tags():
+        if not hub_manager.hubs_for_tag(tag_mac):
             _LOGGER.debug("Skipping image entity creation for blacklisted tag: %s", tag_mac)
             return
 
@@ -98,6 +103,8 @@ async def async_setup_entry(
         don't consume resources with unnecessary image processing.
         """
         for tag_mac in hub.get_blacklisted_tags():
+            if hub_manager.hubs_for_tag(tag_mac):
+                continue
             if tag_mac in added_image_entities:
                 added_image_entities.remove(tag_mac)
 

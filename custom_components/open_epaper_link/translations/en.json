@@ -33,7 +33,6 @@
       "invalid_device_config": "Device returned invalid configuration data. Please reconfigure the device or update its firmware."
     },
     "abort": {
-      "single_instance_allowed": "Only one OpenEPaperLink hub can be configured. Multiple BLE devices are supported, but only one AP hub is allowed.",
       "unsupported_protocol": "Unsupported BLE firmware protocol. Only ATC firmware is supported.",
       "invalid_advertising_data": "Could not parse device advertising data. Please ensure the device is using compatible firmware.",
       "no_reconfigure_ble": "BLE devices do not support reconfiguration. Remove and re-add the device if you need to change its settings.",
@@ -469,6 +468,11 @@
     "no_hub_configured": {
       "message": "No AP hub configured. Only BLE devices found."
     },
+    "hub_target_required": { "message": "More than one AP is configured. Select a tag or AP target so OpenEPaperLink can route the action." },
+    "ap_entry_not_loaded": { "message": "OpenEPaperLink AP config entry {entry_id} is not loaded." },
+    "device_not_ap": { "message": "Device {device_id} is not an OpenEPaperLink access point." },
+    "tag_no_online_ap": { "message": "No online access point currently reports tag {tag_mac} as active. Candidate APs: {candidate_hosts}." },
+    "tag_not_registered_any_ap": { "message": "Tag {tag_mac} is not registered on any loaded OpenEPaperLink access point." },
     "ble_slots_unavailable": {
       "message": "No available Bluetooth connection slots for {mac_address}. Add more ESPHome Bluetooth proxies near this device or wait for existing connections to free up. Details: {error}."
     },

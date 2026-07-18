@@ -86,6 +86,11 @@ class MultiHubManager:
         except (TypeError, ValueError):
             return 0
 
+    @staticmethod
+    def _tag_is_external(hub: Hub, tag_mac: str) -> bool:
+        """Return whether the AP only knows a replicated copy of the tag."""
+        return hub.get_tag_data(tag_mac).get("is_external") is True
+
     def hubs_for_tag(self, tag_mac: str) -> list[Hub]:
         """Return hubs that currently know an unblacklisted tag."""
         tag_mac = normalize_tag_mac(tag_mac)
@@ -100,22 +105,35 @@ class MultiHubManager:
     def resolve_tag_hub(self, tag_mac: str, *, require_online: bool = True) -> Hub:
         """Resolve a logical tag to its active AP.
 
-        Online hubs that also report the tag as online are preferred. If more
-        than one AP reports the tag online, the freshest ``last_seen`` wins.
-        Read-only callers may set ``require_online=False`` and receive the
-        freshest online or cached candidate.
+        Only an AP with a local, online tag may receive write operations.
+        Replicated ``is_external`` database entries cannot deliver data to the
+        physical tag and are therefore excluded from active routing. If more
+        than one local AP reports the tag online, the freshest ``last_seen``
+        wins. Read-only callers may set ``require_online=False`` and receive
+        the freshest local, online, or cached candidate.
         """
         tag_mac = normalize_tag_mac(tag_mac)
         candidates = self.hubs_for_tag(tag_mac)
+        local_candidates = [
+            hub
+            for hub in candidates
+            if not self._tag_is_external(hub, tag_mac)
+        ]
         active = [
-            hub for hub in candidates if hub.online and hub.is_tag_online(tag_mac)
+            hub
+            for hub in local_candidates
+            if hub.online and hub.is_tag_online(tag_mac)
         ]
 
         if require_online:
             selectable = active
         else:
             selectable = (
-                active or [hub for hub in candidates if hub.online] or candidates
+                active
+                or [hub for hub in local_candidates if hub.online]
+                or local_candidates
+                or [hub for hub in candidates if hub.online]
+                or candidates
             )
 
         if not selectable:
@@ -152,6 +170,7 @@ class MultiHubManager:
                     "online": hub.online,
                     "tag_online": hub.is_tag_online(tag_mac) if hub.online else False,
                     "last_seen": self._tag_last_seen(hub, tag_mac),
+                    "is_external": self._tag_is_external(hub, tag_mac),
                 }
                 for hub in candidates
             ],

@@ -37,6 +37,7 @@ class FakeHub:
         last_seen: int,
         online: bool = True,
         tag_online: bool = True,
+        is_external: bool | None = None,
         tags: list[str] | None = None,
         blacklisted: list[str] | None = None,
     ) -> None:
@@ -46,7 +47,13 @@ class FakeHub:
         self.tags = tags if tags is not None else [TAG]
         self._blacklisted = blacklisted or []
         self._tag_online = tag_online
-        self._data = {TAG: {"last_seen": last_seen, "host": host}}
+        self._data = {
+            TAG: {
+                "last_seen": last_seen,
+                "host": host,
+                "is_external": is_external,
+            }
+        }
 
     def get_tag_data(self, tag_mac: str) -> dict:
         return self._data.get(tag_mac, {})
@@ -87,6 +94,62 @@ def test_inactive_duplicate_does_not_steal_route() -> None:
     manager.register_hub(hub_b)
 
     assert manager.resolve_tag_hub(TAG) is hub_b
+
+
+def test_external_duplicate_does_not_steal_route_on_equal_last_seen() -> None:
+    """A replicated AP database entry cannot deliver to the physical tag."""
+    manager = MultiHubManager(FakeHass())
+    external_hub = FakeHub(
+        "entry-z",
+        "192.0.2.143",
+        last_seen=300,
+        is_external=True,
+    )
+    local_hub = FakeHub(
+        "entry-a",
+        "192.0.2.166",
+        last_seen=300,
+        is_external=False,
+    )
+    manager.register_hub(external_hub)
+    manager.register_hub(local_hub)
+
+    assert manager.resolve_tag_hub(TAG) is local_hub
+
+
+def test_external_duplicate_does_not_steal_route_when_fresher() -> None:
+    manager = MultiHubManager(FakeHass())
+    external_hub = FakeHub(
+        "entry-z",
+        "192.0.2.143",
+        last_seen=400,
+        is_external=True,
+    )
+    local_hub = FakeHub(
+        "entry-a",
+        "192.0.2.166",
+        last_seen=300,
+        is_external=False,
+    )
+    manager.register_hub(external_hub)
+    manager.register_hub(local_hub)
+
+    assert manager.resolve_tag_hub(TAG) is local_hub
+
+
+def test_external_only_tag_fails_closed_for_write_routing() -> None:
+    manager = MultiHubManager(FakeHass())
+    manager.register_hub(
+        FakeHub(
+            "entry-z",
+            "192.0.2.143",
+            last_seen=400,
+            is_external=True,
+        )
+    )
+
+    with pytest.raises(HomeAssistantError):
+        manager.resolve_tag_hub(TAG)
 
 
 def test_offline_ap_falls_back_to_active_ap() -> None:

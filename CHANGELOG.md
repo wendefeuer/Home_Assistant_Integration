@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.0.3](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.2...3.0.3) (2026-07-18)
+
+### Bug Fixes
+
+* exclude replicated `is_external` tag records from write routing
+* prefer the AP that owns the physical tag even when synchronized AP databases report identical `last_seen` values
+* fail closed when only a replicated tag record is available instead of queueing an update on the wrong AP
+
+### Validation
+
+* twelve focused Multi-AP tests passed on Python 3.14.5 with Home Assistant 2026.7.2
+* live image delivery was verified with the shared test display `OeP Datum`
+* an existing shopping-list display resumed receiving updates after the fix
+* the 27 pre-existing image snapshot deviations remain unrelated to this routing change
+
 ## [3.0.2](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.1...3.0.2) (2026-07-14)
 
 ### Bug Fixes

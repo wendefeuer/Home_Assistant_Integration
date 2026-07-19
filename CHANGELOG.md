@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [3.1.0](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.3...3.1.0) (2026-07-19)
 
 ### Features
 

@@ -103,6 +103,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
             OpenEPaperLinkTagButton(hass, tag_mac, hub, description)
             for description in TAG_BUTTON_TYPES
         ]
+        new_buttons.extend(
+            TagEventResetButton(hub, tag_mac, description)
+            for description in TAG_EVENT_RESET_BUTTON_TYPES
+        )
         async_add_entities(new_buttons)
 
     # Add buttons for existing tags
@@ -218,6 +222,35 @@ TAG_BUTTON_TYPES: tuple[OpenEPaperLinkTagButtonDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class TagEventResetButtonDescription(ButtonEntityDescription):
+    """Describe a persistent tag-event counter reset button."""
+
+    event_type: str
+
+
+TAG_EVENT_RESET_BUTTON_TYPES: tuple[TagEventResetButtonDescription, ...] = (
+    TagEventResetButtonDescription(
+        key="event_button_1_reset",
+        translation_key="event_button_1_reset",
+        event_type="BUTTON1",
+        entity_registry_enabled_default=False,
+    ),
+    TagEventResetButtonDescription(
+        key="event_button_2_reset",
+        translation_key="event_button_2_reset",
+        event_type="BUTTON2",
+        entity_registry_enabled_default=False,
+    ),
+    TagEventResetButtonDescription(
+        key="event_nfc_reset",
+        translation_key="event_nfc_reset",
+        event_type="NFC",
+        entity_registry_enabled_default=False,
+    ),
+)
+
+
 class OpenEPaperLinkTagButton(OpenEPaperLinkTagEntity, ButtonEntity):
     """Generic tag button entity."""
 
@@ -234,6 +267,34 @@ class OpenEPaperLinkTagButton(OpenEPaperLinkTagEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press."""
         await self._hub.send_tag_cmd(self._entity_id, self.entity_description.command)
+
+
+class TagEventResetButton(OpenEPaperLinkTagEntity, ButtonEntity):
+    """Reset one HA-managed button or NFC counter."""
+
+    entity_description: TagEventResetButtonDescription
+
+    def __init__(
+        self,
+        hub,
+        tag_mac: str,
+        description: TagEventResetButtonDescription,
+    ) -> None:
+        super().__init__(hub, tag_mac)
+        self.entity_description = description
+        self._attr_unique_id = f"{tag_mac}_{description.key}"
+        self._attr_entity_registry_enabled_default = (
+            description.entity_registry_enabled_default
+        )
+
+    async def async_press(self) -> None:
+        """Reset the selected counter and retain its last-event timestamp."""
+        await self._hub_manager.async_reset_tag_event_count(
+            self._tag_mac, self.entity_description.event_type
+        )
+        async_dispatcher_send(
+            self.hass, f"{DOMAIN}_tag_update_{self._tag_mac}"
+        )
 
 
 class RebootAPButton(OpenEPaperLinkAPEntity, ButtonEntity):

@@ -19,7 +19,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 import logging
 
-from .const import DOMAIN, SIGNAL_AP_UPDATE, SIGNAL_TAG_UPDATE, SIGNAL_TAG_IMAGE_UPDATE
+from .const import (
+    DOMAIN,
+    SIGNAL_AP_UPDATE,
+    SIGNAL_TAG_IMAGE_UPDATE,
+    SIGNAL_TAG_REBOOT,
+    SIGNAL_TAG_UPDATE,
+)
 from .hub_manager import get_hub_manager
 from .tag_types import get_tag_types_manager, get_hw_string
 
@@ -116,6 +122,7 @@ class Hub:
         self._button_debounce_interval = timedelta(seconds=0.5)
         self._nfc_last_scan: Dict[str, datetime] = {}
         self._nfc_debounce_interval = timedelta(seconds=1)
+        self._last_reboot_events: dict[str, tuple[Any, Any, Any]] = {}
         self._update_debounce_interval()
         self._ap_cmd_sem = asyncio.Semaphore(1)
         self._ap_cmd_cooldown = 0.5
@@ -626,16 +633,23 @@ class Hub:
         hw_string = get_hw_string(hw_type)
         width, height = self._tag_manager.get_hw_dimensions(hw_type)
         content_mode = tag_data.get("contentMode")
-        wakeup_reason = self._get_wakeup_reason_string(tag_data.get("wakeupReason"))
+        raw_wakeup_reason = tag_data.get("wakeupReason")
+        wakeup_reason = self._get_wakeup_reason_string(raw_wakeup_reason)
         capabilities = tag_data.get("capabilities")
         hashv = tag_data.get("hash")
-        modecfgjson = tag_data.get("modecfgjson")
         is_external = tag_data.get("isexternal")
         rotate = tag_data.get("rotate")
         lut = tag_data.get("lut")
         channel = tag_data.get("ch")
         version = tag_data.get("ver")
         update_count = tag_data.get("updatecount")
+        reboot_event = (raw_wakeup_reason, last_seen, update_count)
+        is_new_reboot_event = (
+            raw_wakeup_reason in (1, 252, 254)
+            and self._last_reboot_events.get(tag_mac) != reboot_event
+        )
+        if raw_wakeup_reason in (1, 252, 254):
+            self._last_reboot_events[tag_mac] = reboot_event
 
         # Check if name has changed
         old_name = existing_data.get("tag_name")
@@ -661,7 +675,11 @@ class Hub:
 
         # Update boot count if this is a power-on event
         boot_count = existing_data.get("boot_count", 1)
-        if not is_initial_load and wakeup_reason in [1, 252, 254]:  # BOOT, FIRSTBOOT, WDT_RESET
+        if (
+            not is_initial_load
+            and is_new_reboot_event
+            and is_external is not True
+        ):
             boot_count += 1
             runtime_total = 0  # Reset runtime on boot
 
@@ -693,7 +711,6 @@ class Hub:
             "wakeup_reason": wakeup_reason,
             "capabilities": capabilities,
             "hash": hashv,
-            "modecfgjson": modecfgjson,
             "is_external": is_external,
             "rotate": rotate,
             "lut": lut,
@@ -716,13 +733,29 @@ class Hub:
         # Fire state update event
         async_dispatcher_send(self.hass, f"{SIGNAL_TAG_UPDATE}_{tag_mac}")
 
+        if (
+            not is_initial_load
+            and is_new_reboot_event
+            and is_external is not True
+        ):
+            async_dispatcher_send(
+                self.hass,
+                SIGNAL_TAG_REBOOT,
+                tag_mac,
+                wakeup_reason,
+            )
+
         # Handle wakeup event if needed and not initial load
         wakeup_reason = tag_data.get("wakeupReason")
-        if not is_initial_load and wakeup_reason is not None:
+        if (
+            not is_initial_load
+            and wakeup_reason is not None
+            and is_external is not True
+        ):
             reason_string = self._get_wakeup_reason_string(wakeup_reason)
 
             should_fire = True
-            current_time = datetime.now()
+            current_time = datetime.now(timezone.utc)
 
             # Apply debouncing based on event type
             if reason_string in ["BUTTON1", "BUTTON2", "BUTTON3", "BUTTON4", "BUTTON5", "BUTTON6", "BUTTON7", "BUTTON8", "BUTTON9", "BUTTON10"]:
@@ -744,6 +777,15 @@ class Hub:
                     self._nfc_last_scan[debounce_key] = current_time
 
             if should_fire:
+                if reason_string in ("BUTTON1", "BUTTON2", "NFC"):
+                    await get_hub_manager(self.hass).async_record_tag_event(
+                        tag_mac,
+                        reason_string,
+                        current_time.timestamp(),
+                    )
+                    async_dispatcher_send(
+                        self.hass, f"{SIGNAL_TAG_UPDATE}_{tag_mac}"
+                    )
                 device_registry = dr.async_get(self.hass)
                 device = device_registry.async_get_device(
                     identifiers={(DOMAIN, tag_mac)}

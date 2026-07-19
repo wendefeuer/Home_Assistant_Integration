@@ -7,9 +7,15 @@ from typing import Final, Any, Callable
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from .ble import BLEConnectionError, BLETimeoutError, BLEProtocolError
-from .const import DOMAIN, SIGNAL_TAG_IMAGE_UPDATE
+from .const import DOMAIN, SIGNAL_TAG_IMAGE_UPDATE, SIGNAL_TAG_REBOOT
+from .drawcustom_cache import (
+    ReplayPayload,
+    UploadReservation,
+    build_upload_fingerprint,
+    get_drawcustom_cache,
+)
 from .imagegen import ImageGen
 from .tag_types import get_tag_types_manager
 from .upload import create_upload_queues, DITHER_DEFAULT, upload_to_ble_block, upload_to_hub
@@ -30,6 +36,54 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     # Create upload queues
     ble_upload_queue, hub_upload_queue = create_upload_queues()
+    drawcustom_cache = get_drawcustom_cache(hass)
+    await drawcustom_cache.async_load()
+
+    async def upload_with_cache(
+        reservation: UploadReservation,
+        replay_payload: ReplayPayload | None,
+        upload_func: Callable,
+        *args: Any,
+    ) -> None:
+        """Run an upload and update its cache reservation."""
+        try:
+            await upload_func(*args)
+        except Exception:
+            await drawcustom_cache.async_mark_failure(reservation)
+            raise
+        await drawcustom_cache.async_mark_success(reservation, replay_payload)
+
+    async def queue_drawcustom_upload(
+        queue,
+        target_key: str,
+        fingerprint: str,
+        only_if_changed: bool,
+        replay_payload: ReplayPayload | None,
+        upload_func: Callable,
+        *args: Any,
+    ) -> bool:
+        """Queue a drawcustom upload unless its effective output is unchanged."""
+        reservation = await drawcustom_cache.async_reserve(
+            target_key,
+            fingerprint,
+            only_if_changed=only_if_changed,
+        )
+        if reservation is None:
+            _LOGGER.debug("Skipping unchanged drawcustom upload for %s", target_key)
+            return False
+
+        try:
+            await queue.add_to_queue(
+                upload_with_cache,
+                reservation,
+                replay_payload,
+                upload_func,
+                *args,
+            )
+        except Exception:
+            await drawcustom_cache.async_mark_failure(reservation)
+            raise
+        return True
 
     async def get_device_ids_from_label_id(label_id: str) -> list[str]:
         """Get device_ids for OpenEPaperLink devices with a specific label."""
@@ -212,6 +266,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         - Background color and rotation
         - Dithering options
         - "Dry run" mode for testing
+        - Optional suppression of unchanged uploads
 
         Args:
             service: Service call object with parameters and target devices
@@ -271,8 +326,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
             # Upload image
             dither = int(service.data.get("dither", DITHER_DEFAULT))
-
             refresh_type = int(service.data.get("refresh_type", 0))
+            only_if_changed = bool(service.data.get("only_if_changed", False))
+            tag_mac = get_mac_from_entity_id(entity_id).upper()
 
             if is_ble:
                 from .util import is_bluetooth_available
@@ -283,19 +339,56 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         translation_placeholders={"entity_id": entity_id},
                     )
 
-                # Determine upload method
-                await ble_upload_queue.add_to_queue(upload_to_ble_block, hass, entity_id, image_data, dither)
+                parameters = {
+                    "transport": "ble",
+                    "dither": dither,
+                }
+                fingerprint = build_upload_fingerprint(image_data, parameters)
+                await queue_drawcustom_upload(
+                    ble_upload_queue,
+                    f"ble:{tag_mac}",
+                    fingerprint,
+                    only_if_changed,
+                    None,
+                    upload_to_ble_block,
+                    hass,
+                    entity_id,
+                    image_data,
+                    dither,
+                )
             else:
                 # Map refresh_type to AP's lut parameter
                 # 0→1 (full), 1→3 (fast), 2→2 (fast no-reds), 3→0 (no-repeats)
                 ap_lut_mapping = {0: 1, 1: 3, 2: 2, 3: 0}
                 ap_lut = ap_lut_mapping.get(refresh_type, 1)  # Default to 1 (full) if invalid
-                await hub_upload_queue.add_to_queue(
+                ttl = int(service.data.get("ttl", 60))
+                preload_type = int(service.data.get("preload_type", 0))
+                preload_lut = int(service.data.get("preload_lut", 0))
+                parameters = {
+                    "transport": "ap",
+                    "dither": dither,
+                    "ttl_minutes": max(1, ttl // 60),
+                    "preload_type": preload_type,
+                    "preload_lut": preload_lut if preload_type > 0 else 0,
+                    "lut": ap_lut,
+                }
+                fingerprint = build_upload_fingerprint(image_data, parameters)
+                replay_payload = ReplayPayload(
+                    image_data=image_data,
+                    parameters=parameters,
+                    fingerprint=fingerprint,
+                )
+                await queue_drawcustom_upload(
+                    hub_upload_queue,
+                    f"ap:{tag_mac}",
+                    fingerprint,
+                    only_if_changed,
+                    replay_payload,
                     upload_to_hub, hub, entity_id, image_data, dither,
-                    service.data.get("ttl", 60),
-                    service.data.get("preload_type", 0),
-                    service.data.get("preload_lut", 0),
-                    ap_lut
+                    ttl,
+                    preload_type,
+                    preload_lut,
+                    ap_lut,
                 )
 
         except ServiceValidationError:
@@ -318,6 +411,79 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         pattern = _build_led_pattern(service.data)
 
         await hub.set_led_pattern(entity_id, pattern)
+
+    async def resend_image_after_reboot(tag_mac: str, reason: str) -> None:
+        """Requeue the last successful AP image after a tag reboot."""
+        target_key = f"ap:{tag_mac.upper()}"
+        manager = get_hub_manager(hass)
+        tag_data = manager.get_tag_data(tag_mac)
+        if tag_data.get("content_mode") != "Home Assistant":
+            _LOGGER.debug(
+                "Skipping reboot image resend for %s after %s: content mode is %s",
+                tag_mac,
+                reason,
+                tag_data.get("content_mode"),
+            )
+            return
+
+        try:
+            hub = manager.resolve_tag_hub(tag_mac, require_online=True)
+        except HomeAssistantError as err:
+            _LOGGER.warning(
+                "Unable to resolve an AP for reboot image resend of %s: %s",
+                tag_mac,
+                err,
+            )
+            return
+
+        replay = await drawcustom_cache.async_reserve_replay(target_key)
+        if replay is None:
+            _LOGGER.debug(
+                "No reboot image resend queued for %s after %s; disabled, "
+                "missing cached image, or a newer upload is pending",
+                tag_mac,
+                reason,
+            )
+            return
+
+        reservation, replay_payload = replay
+        parameters = replay_payload.parameters
+        entity_id = f"{DOMAIN}.{tag_mac.lower()}"
+        ttl_minutes = max(1, int(parameters.get("ttl_minutes", 1)))
+        try:
+            await hub_upload_queue.add_to_queue(
+                upload_with_cache,
+                reservation,
+                replay_payload,
+                upload_to_hub,
+                hub,
+                entity_id,
+                replay_payload.image_data,
+                int(parameters.get("dither", DITHER_DEFAULT)),
+                ttl_minutes * 60,
+                int(parameters.get("preload_type", 0)),
+                int(parameters.get("preload_lut", 0)),
+                int(parameters.get("lut", 1)),
+            )
+        except Exception:
+            await drawcustom_cache.async_mark_failure(reservation)
+            raise
+
+        errors = await hub_upload_queue.wait_for_current_batch()
+        if errors:
+            _LOGGER.error(
+                "Cached image resend failed for %s after %s: %s",
+                tag_mac,
+                reason,
+                "; ".join(errors),
+            )
+            return
+
+        _LOGGER.info(
+            "Reuploaded cached image for %s after tag reboot (%s)",
+            tag_mac,
+            reason,
+        )
 
     @handle_targets
     async def clear_pending_service(service: ServiceCall, entity_id: str) -> None:
@@ -403,3 +569,4 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "scan_channels", scan_channels_service)
     hass.services.async_register(DOMAIN, "reboot_ap", reboot_ap_service)
     hass.services.async_register(DOMAIN, "refresh_tag_types", refresh_tag_types_service)
+    async_dispatcher_connect(hass, SIGNAL_TAG_REBOOT, resend_image_after_reboot)

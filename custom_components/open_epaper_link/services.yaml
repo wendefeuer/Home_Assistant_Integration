@@ -97,6 +97,15 @@ drawcustom:
       default: false
       selector:
         boolean:
+    only_if_changed:
+      name: Only send if changed
+      description: >
+        Send the image only when its rendered content or effective upload
+        settings differ from the last successful upload to this display
+      required: false
+      default: false
+      selector:
+        boolean:
 
 setled:
   name: Set LED Pattern

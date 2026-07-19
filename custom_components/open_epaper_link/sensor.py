@@ -279,6 +279,48 @@ TAG_SENSOR_TYPES: tuple[OpenEPaperLinkSensorEntityDescription, ...] = (
         value_fn=lambda data: data.get("content_mode"),
     ),
     OpenEPaperLinkSensorEntityDescription(
+        key="event_button_1_last",
+        name="Event Button 1 - Last activation",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda data: _tag_event_last(data, "BUTTON1"),
+        entity_registry_enabled_default=False,
+    ),
+    OpenEPaperLinkSensorEntityDescription(
+        key="event_button_1_count",
+        name="Event Button 1 - Count",
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda data: _tag_event_count(data, "BUTTON1"),
+        entity_registry_enabled_default=False,
+    ),
+    OpenEPaperLinkSensorEntityDescription(
+        key="event_button_2_last",
+        name="Event Button 2 - Last activation",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda data: _tag_event_last(data, "BUTTON2"),
+        entity_registry_enabled_default=False,
+    ),
+    OpenEPaperLinkSensorEntityDescription(
+        key="event_button_2_count",
+        name="Event Button 2 - Count",
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda data: _tag_event_count(data, "BUTTON2"),
+        entity_registry_enabled_default=False,
+    ),
+    OpenEPaperLinkSensorEntityDescription(
+        key="event_nfc_last",
+        name="Event NFC - Last activation",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda data: _tag_event_last(data, "NFC"),
+        entity_registry_enabled_default=False,
+    ),
+    OpenEPaperLinkSensorEntityDescription(
+        key="event_nfc_count",
+        name="Event NFC - Count",
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda data: _tag_event_count(data, "NFC"),
+        entity_registry_enabled_default=False,
+    ),
+    OpenEPaperLinkSensorEntityDescription(
         key="wakeup_reason",
         name="Wakeup Reason",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -446,13 +488,28 @@ def _calculate_battery_percentage(voltage: int) -> int:
     return max(0, min(100, int(percentage)))
 
 
+def _tag_event_count(data: dict, event_type: str) -> int:
+    """Return the persistent count for one HA-managed tag event."""
+    return int(
+        data.get("event_stats", {}).get(event_type, {}).get("count", 0)
+    )
+
+
+def _tag_event_last(data: dict, event_type: str) -> datetime | None:
+    """Return the last accepted event time as an aware UTC datetime."""
+    value = data.get("event_stats", {}).get(event_type, {}).get("last")
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return None
+
+
 def _tag_has_battery(tag_data: dict) -> bool:
-    """Check if a tag is battery-powered."""
+    """Check whether a tag reports usable battery telemetry."""
     if not tag_data:
         return True  # Default to creating sensors when data is missing
-
-    if tag_data.get("is_external"):
-        return False
 
     battery_mv = tag_data.get("battery_mv")
     return battery_mv is not None and battery_mv > 0
@@ -470,7 +527,7 @@ def _remove_battery_sensors(
 
     for entity in er.async_entries_for_config_entry(entity_registry, entry_id):
         if entity.unique_id in unique_ids:
-            _LOGGER.info("Removing battery sensor for external-power tag: %s", entity.entity_id)
+            _LOGGER.info("Removing battery sensor for tag without battery telemetry: %s", entity.entity_id)
             entity_registry.async_remove(entity.entity_id)
 
 
@@ -491,14 +548,22 @@ class OpenEPaperLinkTagSensor(OpenEPaperLinkTagEntity, SensorEntity):
         """Return the state of the sensor."""
         if not self.available or self.entity_description.value_fn is None:
             return None
-        return self.entity_description.value_fn(self._hub.get_tag_data(self._tag_mac))
+        data = dict(self._hub.get_tag_data(self._tag_mac))
+        data["event_stats"] = self._hub_manager.get_tag_event_stats(
+            self._tag_mac
+        )
+        return self.entity_description.value_fn(data)
 
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
         if self.entity_description.attr_fn is None:
             return None
-        return self.entity_description.attr_fn(self._hub.get_tag_data(self._tag_mac))
+        data = dict(self._hub.get_tag_data(self._tag_mac))
+        data["event_stats"] = self._hub_manager.get_tag_event_stats(
+            self._tag_mac
+        )
+        return self.entity_description.attr_fn(data)
 
 class OpenEPaperLinkAPSensor(OpenEPaperLinkAPEntity, SensorEntity):
     """Sensor class for OpenEPaperLink AP data."""

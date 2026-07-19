@@ -86,6 +86,7 @@ class UploadQueueHandler:
         # Start the processing queue if not already running
         if not self._processing:
             _LOGGER.debug("Starting upload queue processor for %s", entity_id)
+            self._processing = True
             self._processor_task = asyncio.create_task(self._process_queue())
 
     async def wait_for_current_batch(self):
@@ -121,7 +122,6 @@ class UploadQueueHandler:
         Handles errors in individual uploads without stopping queue processing.
         This method runs until the queue is empty, then terminates.
         """
-        self._processing = True
         _LOGGER.debug("Upload queue processor started. %s", self)
 
         running_tasks = set()
@@ -167,6 +167,8 @@ class UploadQueueHandler:
                         upload_func, args, kwargs = await self._queue.get()
                         entity_id = next((arg for arg in args if isinstance(arg, str) and "." in arg), "unknown")
 
+                        self._active_uploads += 1
+
                         # Create and start background task
                         task = asyncio.create_task(self._execute_upload(upload_func, args, kwargs, entity_id))
                         running_tasks.add(task)
@@ -187,7 +189,6 @@ class UploadQueueHandler:
     async def _execute_upload(self, upload_func, args, kwargs, entity_id):
         """Execute a single upload task in the background."""
         try:
-            # TODO don't we need the incrementation logic here?
             _LOGGER.debug("Starting upload for %s", entity_id)
             await upload_func(*args, **kwargs)
             _LOGGER.info("Successfully completed upload for %s", entity_id)

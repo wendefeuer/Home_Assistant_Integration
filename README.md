@@ -96,6 +96,29 @@ Probleme bitte zentral im [Issue-Tracker des Forks](https://github.com/wendefeue
 - AP settings management (WiFi, Bluetooth, language, etc.)
 - Tag inventory and blacklist management
 
+### 🔘 Button and NFC events / Button- und NFC-Ereignisse
+
+For every AP-connected display, Home Assistant keeps independent values for **Button 1**, **Button 2**, and **NFC**. They work with every display content mode; the AP's optional **Time Stamp** mode is not required. Each accepted event updates a persistent counter and a last-activation timestamp. Device triggers remain the recommended way to start automations immediately.
+
+Home Assistant führt für jedes am AP angebundene Display eigene Werte für **Button 1**, **Button 2** und **NFC**. Sie funktionieren unabhängig vom Inhaltsmodus des Displays; der optionale AP-Modus **Time Stamp** wird dafür nicht benötigt. Jedes angenommene Ereignis erhöht einen dauerhaft gespeicherten Zähler und aktualisiert den Zeitpunkt der letzten Auslösung. Zum unmittelbaren Starten einer Automation werden weiterhin die Geräteauslöser empfohlen.
+
+> [!IMPORTANT]
+> Restart Home Assistant once after installing this version. All nine event entities are **disabled by default**, because many displays have neither two buttons nor NFC. Enable only the required Button 1, Button 2, or NFC group on the display's Home Assistant device page. Existing user-enabled entities keep their current registry setting during an update. Event values continue to be recorded while their entities are disabled.
+>
+> After enabling a group, its counter initially shows `0` if no event has occurred; a last-activation sensor remains **Unknown / Unbekannt** until that event is received for the first time. This is expected and is not an integration error. The previous #330 timestamp-mode configuration entities are removed automatically during setup.
+
+The related entities deliberately share the prefix **Event Button 1**, **Event Button 2**, or **Event NFC** (German: **Ereignis Button 1**, **Ereignis Button 2**, **Ereignis NFC**) so they are easy to recognize as a group on the device page:
+
+| Entity in each group | Meaning |
+| --- | --- |
+| **Last activation / Letzte Auslösung** | Timestamp of the most recently accepted event; unknown before the first event. |
+| **Count / Anzahl** | Persistent number of accepted events; survives Home Assistant restarts. |
+| **Reset count / Zähler zurücksetzen** | Control button that sets only the counter to `0`; the last timestamp is retained. |
+
+The integration applies the configured button/NFC debounce interval before updating these values. Replicated `is_external` records in Multi-AP installations neither increment the counters nor emit duplicate Home Assistant events. A display without Button 2 or NFC still receives the corresponding entities; they simply remain at `0` and **Unknown / Unbekannt**.
+
+Die Integration wendet vor der Aktualisierung die konfigurierte Button-/NFC-Entstörzeit an. Replizierte `is_external`-Datensätze einer Multi-AP-Installation erhöhen weder die Zähler noch erzeugen sie doppelte HA-Ereignisse. Besitzt ein Display keinen zweiten Button oder kein NFC, bleiben die betreffenden Werte einfach bei `0` beziehungsweise **Unbekannt**.
+
 ### 🎨 Display Controls
 
 #### drawcustom (Recommended)
@@ -109,6 +132,20 @@ The most flexible and powerful service for creating custom displays. Supports:
 - Progress bars
 
 [View full drawcustom documentation](docs/drawcustom/supported_types.md)
+
+Set the optional `only_if_changed: true` parameter to upload a rendered image only when its pixels or effective upload settings have changed. The last successful result is retained across Home Assistant restarts. A dry run still creates a preview and never updates this cache. To force a transfer after the display was changed elsewhere, call `drawcustom` once without `only_if_changed`.
+
+Mit dem optionalen Parameter `only_if_changed: true` wird ein gerendertes Bild nur übertragen, wenn sich seine Pixel oder die effektiven Upload-Einstellungen geändert haben. Das letzte erfolgreiche Ergebnis bleibt über HA-Neustarts erhalten. Ein Dry-Run erzeugt weiterhin eine Vorschau und verändert diesen Cache nicht. Wurde das Display außerhalb der Integration geändert, kann die Übertragung durch einen einmaligen `drawcustom`-Aufruf ohne `only_if_changed` erzwungen werden.
+
+#### Automatic resend after a tag reboot / Automatisches Wiederholen nach einem Display-Neustart
+
+Every AP-connected display has a **Resend Image After Reboot** switch under **Configuration**. The switch is visible after the update but is **off by default**. When enabled, the integration reuploads the last successfully transmitted `drawcustom` image after the AP reports `BOOT`, `FIRSTBOOT`, or `WDT_RESET` for that display.
+
+The recovery image becomes available only after a successful `drawcustom` upload made with the new integration version. Images created before the update cannot be recovered automatically until they have been sent again. Dry runs and failed uploads never replace the recovery image. Recovery is limited to tags in **Home Assistant** content mode (`25`), so an old image cannot overwrite Timestamp, Remote content, or another AP-managed mode. In Multi-AP installations, replicated external tag records never trigger a resend.
+
+Jedes am AP angebundene Display erhält unter **Konfiguration** den Schalter **Bild nach Neustart erneut senden**. Die Entität ist nach dem Update sichtbar, der Schalter steht aber standardmäßig auf **aus**. Ist er eingeschaltet, überträgt die Integration das zuletzt erfolgreich gesendete `drawcustom`-Bild erneut, sobald der AP für dieses Display `BOOT`, `FIRSTBOOT` oder `WDT_RESET` meldet.
+
+Ein Wiederherstellungsbild steht erst nach einem erfolgreichen `drawcustom`-Upload mit der neuen Integrationsversion zur Verfügung. Bilder aus der Zeit vor dem Update müssen deshalb einmal erneut gesendet werden. Dry-Runs und fehlgeschlagene Uploads ersetzen das Wiederherstellungsbild nicht. Die Funktion arbeitet ausschließlich im Inhaltsmodus **Home Assistant** (`25`), damit kein altes Bild einen Timestamp-, Remote-content- oder anderen AP-Modus überschreibt. In Multi-AP-Installationen lösen replizierte externe Display-Datensätze keine Übertragung aus.
 
 #### Legacy Services (Deprecated)
 The following services have been deprecated in favor of drawcustom:

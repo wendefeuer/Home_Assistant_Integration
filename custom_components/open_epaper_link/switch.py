@@ -11,7 +11,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .entity import OpenEPaperLinkAPEntity
+from .drawcustom_cache import get_drawcustom_cache
+from .entity import OpenEPaperLinkAPEntity, OpenEPaperLinkTagEntity
+from .hub_manager import get_hub_manager
 from .runtime_data import OpenEPaperLinkConfigEntry
 
 import logging
@@ -109,6 +111,37 @@ class APConfigSwitch(OpenEPaperLinkAPEntity, SwitchEntity):
         )
 
 
+class TagResendImageAfterRebootSwitch(OpenEPaperLinkTagEntity, SwitchEntity):
+    """Enable automatic replay of the last successful drawcustom image."""
+
+    _attr_entity_registry_enabled_default = True
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_class = SwitchDeviceClass.SWITCH
+
+    def __init__(self, hub, tag_mac: str) -> None:
+        """Initialize the per-display reboot recovery switch."""
+        super().__init__(hub, tag_mac)
+        self._cache = get_drawcustom_cache(hub.hass)
+        self._target_key = f"ap:{tag_mac.upper()}"
+        self._attr_unique_id = f"{tag_mac}_resend_image_after_reboot"
+        self._attr_translation_key = "resend_image_after_reboot"
+
+    @property
+    def is_on(self) -> bool:
+        """Return the persisted reboot recovery setting."""
+        return self._cache.is_resend_enabled(self._target_key)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable automatic image replay for this display."""
+        await self._cache.async_set_resend_enabled(self._target_key, True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Disable automatic image replay for this display."""
+        await self._cache.async_set_resend_enabled(self._target_key, False)
+        self.async_write_ha_state()
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntry,
                             async_add_entities: AddEntitiesCallback) -> None:
     """Set up switch entities for AP configuration.
@@ -128,6 +161,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
         async_add_entities: Callback to register new entities
     """
     hub = entry.runtime_data
+    hub_manager = get_hub_manager(hass)
 
     # Wait for initial AP config to be loaded
     if not hub.ap_config:
@@ -139,4 +173,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
     for description in SWITCH_ENTITIES:
         entities.append(APConfigSwitch(hub, description))
 
+    added_tag_switches: set[str] = set()
+    for tag_mac in hub.tags:
+        if hub_manager.is_tag_entity_owner(entry.entry_id, tag_mac):
+            entities.append(TagResendImageAfterRebootSwitch(hub, tag_mac))
+            added_tag_switches.add(tag_mac)
+
     async_add_entities(entities)
+
+    @callback
+    def async_add_tag_switch(tag_mac: str) -> None:
+        """Add the reboot recovery switch for a newly discovered tag."""
+        if (
+            tag_mac not in added_tag_switches
+            and hub_manager.is_tag_entity_owner(entry.entry_id, tag_mac)
+        ):
+            added_tag_switches.add(tag_mac)
+            async_add_entities([TagResendImageAfterRebootSwitch(hub, tag_mac)])
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, f"{DOMAIN}_tag_discovered", async_add_tag_switch
+        )
+    )

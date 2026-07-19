@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* add HA-managed, content-mode-independent event groups for **Button 1**, **Button 2**, and **NFC**, each with a persistent counter, last-activation timestamp, and counter reset button
+* add the optional `drawcustom.only_if_changed` setting, including a persistent per-display cache, to avoid uploading an unchanged rendered image and unchanged effective upload settings ([#345](https://github.com/OpenEPaperLink/Home_Assistant_Integration/issues/345))
+* add an opt-in **Resend Image After Reboot** configuration switch per AP display; after `BOOT`, `FIRSTBOOT`, or `WDT_RESET`, it requeues the last successful `drawcustom` image through the normal Multi-AP upload route ([#204](https://github.com/OpenEPaperLink/Home_Assistant_Integration/issues/204))
+
+### Bug Fixes
+
+* create battery entities from usable battery telemetry instead of suppressing them solely because a synchronized Multi-AP record is marked `is_external`
+* ignore replicated `is_external` button/NFC records when emitting events and updating counters, preventing duplicate Multi-AP actions
+* count distinct local tag reboot events correctly instead of comparing translated wakeup-reason text with numeric firmware codes
+
+### Upgrade Notes / Hinweise zum Update
+
+* Restart Home Assistant once after installing this version so the new entity platforms are loaded. / Home Assistant nach der Installation einmal neu starten, damit die neuen Entitätsplattformen geladen werden.
+* The former #330 AP Timestamp configuration entities are removed automatically. The replacement values do not require the AP's **Time Stamp** content mode and work in **Home Assistant**, **Remote content**, and other display modes.
+* The new entity names deliberately use the shared prefixes **Event Button 1**, **Event Button 2**, and **Event NFC** (German: **Ereignis ...**) so each counter, last-activation timestamp, and reset control is recognizable as one group.
+* All nine event entities are disabled by default because display capabilities vary. Enable only the required groups on the HA device page. Existing entity-registry choices are preserved on update, and events continue to be recorded while their entities are disabled.
+* Event counters start at `0` and persist across Home Assistant restarts. A last-activation sensor is **Unknown / Unbekannt** until the corresponding event is received for the first time; displays without that hardware keep the unused group at `0` and unknown.
+* Reset controls clear only their counter; the last-activation timestamp remains available. Device triggers remain the recommended input for automations.
+* With `drawcustom.only_if_changed`, only a successful upload updates the persistent comparison cache. Dry runs always render a preview without changing the cache. Calling `drawcustom` once without the option forces an upload and refreshes the cached result.
+* **Resend Image After Reboot / Bild nach Neustart erneut senden** is a visible per-display configuration switch and defaults to off. It requires at least one successful `drawcustom` upload made after this update; older images, dry runs, and failed uploads do not provide or replace the recovery image.
+* Automatic reboot recovery runs only in Home Assistant content mode (`25`). It does not overwrite Timestamp, Remote content, or other AP-managed modes, and replicated Multi-AP records cannot trigger it.
+
+### Validation
+
+* 37 focused tests cover Multi-AP routing, disabled-by-default and persistent Button 1/Button 2/NFC values, the `drawcustom` comparison cache, and reboot image recovery
+* live Home Assistant 2026.7.2 validation registered all nine grouped event entities for both test displays; all seven integration entries loaded, counters started at `0`, timestamps started at `Unknown`, the superseded #330 entities were removed, and no OpenEPaperLink system-log errors occurred
+* the 27 pre-existing image snapshot deviations remain unrelated to these changes
+
 ## [3.0.3](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.2...3.0.3) (2026-07-18)
 
 ### Bug Fixes

@@ -75,6 +75,9 @@
       },
       "showtimestamp": {
         "name": "Show Timestamp"
+      },
+      "resend_image_after_reboot": {
+        "name": "Resend Image After Reboot"
       }
     },
     "text": {
@@ -196,6 +199,24 @@
       "content_mode": {
         "name": "Content Mode"
       },
+      "event_button_1_last": {
+        "name": "Event Button 1 - Last activation"
+      },
+      "event_button_1_count": {
+        "name": "Event Button 1 - Count"
+      },
+      "event_button_2_last": {
+        "name": "Event Button 2 - Last activation"
+      },
+      "event_button_2_count": {
+        "name": "Event Button 2 - Count"
+      },
+      "event_nfc_last": {
+        "name": "Event NFC - Last activation"
+      },
+      "event_nfc_count": {
+        "name": "Event NFC - Count"
+      },
       "wakeup_reason": {
         "name": "Wakeup Reason"
       },
@@ -258,6 +279,15 @@
       },
       "refresh_config": {
         "name": "Refresh Configuration"
+      },
+      "event_button_1_reset": {
+        "name": "Event Button 1 - Reset count"
+      },
+      "event_button_2_reset": {
+        "name": "Event Button 2 - Reset count"
+      },
+      "event_nfc_reset": {
+        "name": "Event NFC - Reset count"
       }
     },
     "update": {

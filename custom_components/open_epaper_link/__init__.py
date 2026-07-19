@@ -14,6 +14,7 @@ from homeassistant.helpers.typing import ConfigType
 from .ble import BLEDeviceMetadata
 from .const import DOMAIN
 from .coordinator import Hub
+from .drawcustom_cache import STORAGE_KEY as DRAWCUSTOM_CACHE_STORAGE_KEY
 from .hub_manager import get_hub_manager
 from .runtime_data import OpenEPaperLinkConfigEntry, OpenEPaperLinkBLERuntimeData
 from .services import async_setup_services
@@ -85,6 +86,31 @@ async def async_remove_clock_mode_buttons(hass: HomeAssistant, entry: ConfigEntr
             entity_registry.async_remove(entity.entity_id)
             removed_entities.append(entity.entity_id)
 
+    return removed_entities
+
+
+async def async_remove_deprecated_timestamp_entities(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> list[str]:
+    """Remove the superseded AP-native timestamp-mode entities from #330."""
+    deprecated_suffixes = (
+        "_timestamp_1",
+        "_timestamp_2",
+        "_last_button",
+        "_timestamp_reset_1",
+        "_timestamp_reset_2",
+        "_timestamp_nextaction",
+        "_timestamp_mode",
+        "_timestamp_title",
+        "_timestamp_button1",
+        "_timestamp_button2",
+    )
+    entity_registry = er.async_get(hass)
+    removed_entities = []
+    for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        if entity.unique_id and entity.unique_id.endswith(deprecated_suffixes):
+            removed_entities.append(entity.entity_id)
+            entity_registry.async_remove(entity.entity_id)
     return removed_entities
 
 
@@ -437,7 +463,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
         await hub.async_setup_initial()
 
         entry.runtime_data = hub
-        get_hub_manager(hass).register_hub(hub)
+        hub_manager = get_hub_manager(hass)
+        await hub_manager.async_load_tag_events()
+        hub_manager.register_hub(hub)
+
+        removed_timestamp_entities = await async_remove_deprecated_timestamp_entities(
+            hass, entry
+        )
+        if removed_timestamp_entities:
+            _LOGGER.info(
+                "Removed superseded timestamp-mode entities: %s",
+                removed_timestamp_entities,
+            )
 
         removed_entities = await async_migrate_camera_entities(hass, entry)
         if removed_entities:
@@ -604,6 +641,13 @@ async def async_remove_storage_files(hass: HomeAssistant) -> None:
         _LOGGER.debug("Removed tag types storage file")
     except Exception as err:
         _LOGGER.error("Error removing tag types storage file: %s", err)
+
+    # Remove drawcustom upload fingerprint cache
+    try:
+        await storage.async_remove_store(hass, DRAWCUSTOM_CACHE_STORAGE_KEY)
+        _LOGGER.debug("Removed drawcustom upload cache")
+    except Exception as err:
+        _LOGGER.error("Error removing drawcustom upload cache: %s", err)
 
     # Remove tag storage file
     tags_file = os.path.join(storage_dir, f"{DOMAIN}_tags")

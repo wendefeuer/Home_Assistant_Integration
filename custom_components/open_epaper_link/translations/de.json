@@ -75,6 +75,9 @@
       },
       "showtimestamp": {
         "name": "Zeitstempel anzeigen"
+      },
+      "resend_image_after_reboot": {
+        "name": "Bild nach Neustart erneut senden"
       }
     },
     "text": {
@@ -239,6 +242,24 @@
       "content_mode": {
         "name": "Inhaltsmodus"
       },
+      "event_button_1_last": {
+        "name": "Ereignis Button 1 - Letzte Auslösung"
+      },
+      "event_button_1_count": {
+        "name": "Ereignis Button 1 - Anzahl"
+      },
+      "event_button_2_last": {
+        "name": "Ereignis Button 2 - Letzte Auslösung"
+      },
+      "event_button_2_count": {
+        "name": "Ereignis Button 2 - Anzahl"
+      },
+      "event_nfc_last": {
+        "name": "Ereignis NFC - Letzte Auslösung"
+      },
+      "event_nfc_count": {
+        "name": "Ereignis NFC - Anzahl"
+      },
       "wakeup_reason": {
         "name": "Aufwachgrund"
       },
@@ -301,6 +322,15 @@
       },
       "refresh_config": {
         "name": "Konfiguration aktualisieren"
+      },
+      "event_button_1_reset": {
+        "name": "Ereignis Button 1 - Zähler zurücksetzen"
+      },
+      "event_button_2_reset": {
+        "name": "Ereignis Button 2 - Zähler zurücksetzen"
+      },
+      "event_nfc_reset": {
+        "name": "Ereignis NFC - Zähler zurücksetzen"
       }
     },
     "update": {
@@ -337,6 +367,10 @@
         "dry-run": {
           "name": "Trockenlauf",
           "description": "Bild wird nur lokal gespeichert und nicht an den AP gesendet"
+        },
+        "only_if_changed": {
+          "name": "Nur bei Änderung senden",
+          "description": "Bild nur senden, wenn sich der gerenderte Inhalt oder die wirksamen Upload-Einstellungen seit der letzten erfolgreichen Übertragung an dieses Display geändert haben"
         }
       }
     },

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
 
@@ -18,6 +20,9 @@ _LOGGER: Final = logging.getLogger(__name__)
 
 HUB_MANAGER_KEY = "hub_manager"
 AP_IDENTIFIER_PREFIX = "ap_"
+TAG_EVENT_STORAGE_KEY = f"{DOMAIN}_tag_events"
+TAG_EVENT_STORAGE_VERSION = 1
+TRACKED_TAG_EVENTS = ("BUTTON1", "BUTTON2", "NFC")
 
 
 def normalize_tag_mac(tag_mac: str) -> str:
@@ -37,6 +42,69 @@ class MultiHubManager:
         self.hass = hass
         self._hubs: dict[str, Hub] = {}
         self._tag_owners: dict[str, str] = {}
+        self._tag_event_store: Store[dict[str, Any]] | None = None
+        self._tag_event_stats: dict[str, dict[str, dict[str, Any]]] = {}
+        self._tag_event_lock = asyncio.Lock()
+        self._tag_events_loaded = False
+
+    async def async_load_tag_events(self) -> None:
+        """Load persistent button and NFC statistics once for all APs."""
+        async with self._tag_event_lock:
+            if self._tag_events_loaded:
+                return
+            self._tag_event_store = Store[dict[str, Any]](
+                self.hass,
+                TAG_EVENT_STORAGE_VERSION,
+                TAG_EVENT_STORAGE_KEY,
+                private=True,
+                atomic_writes=True,
+            )
+            stored = await self._tag_event_store.async_load() or {}
+            tags = stored.get("tags", {})
+            self._tag_event_stats = tags if isinstance(tags, dict) else {}
+            self._tag_events_loaded = True
+
+    def get_tag_event_stats(self, tag_mac: str) -> dict[str, dict[str, Any]]:
+        """Return a defensive copy of the HA-managed event values for a tag."""
+        stats = self._tag_event_stats.get(normalize_tag_mac(tag_mac), {})
+        return {
+            event_type: dict(values)
+            for event_type, values in stats.items()
+            if isinstance(values, dict)
+        }
+
+    async def async_record_tag_event(
+        self, tag_mac: str, event_type: str, occurred_at: float
+    ) -> None:
+        """Persist one accepted button or NFC event for a logical tag."""
+        if event_type not in TRACKED_TAG_EVENTS:
+            return
+        await self.async_load_tag_events()
+        tag_mac = normalize_tag_mac(tag_mac)
+        async with self._tag_event_lock:
+            tag_stats = self._tag_event_stats.setdefault(tag_mac, {})
+            event_stats = tag_stats.setdefault(event_type, {})
+            event_stats["count"] = int(event_stats.get("count", 0)) + 1
+            event_stats["last"] = occurred_at
+            await self._tag_event_store.async_save(
+                {"tags": self._tag_event_stats}
+            )
+
+    async def async_reset_tag_event_count(
+        self, tag_mac: str, event_type: str
+    ) -> None:
+        """Reset one persistent event counter without clearing its timestamp."""
+        if event_type not in TRACKED_TAG_EVENTS:
+            return
+        await self.async_load_tag_events()
+        tag_mac = normalize_tag_mac(tag_mac)
+        async with self._tag_event_lock:
+            tag_stats = self._tag_event_stats.setdefault(tag_mac, {})
+            event_stats = tag_stats.setdefault(event_type, {})
+            event_stats["count"] = 0
+            await self._tag_event_store.async_save(
+                {"tags": self._tag_event_stats}
+            )
 
     @property
     def hubs(self) -> tuple[Hub, ...]:
@@ -205,26 +273,98 @@ class MultiHubManager:
     def is_tag_entity_owner(self, entry_id: str, tag_mac: str) -> bool:
         """Choose one config entry to create the shared tag entities.
 
-        Existing entity-registry ownership wins so entity IDs and automation
-        references stay stable across upgrades and restarts.
+        A replicated ``is_external`` record must never own the shared entities.
+        When a tag moved between APs, migrate its existing registry entries to
+        the freshest local owner while preserving entity IDs and unique IDs.
         """
         tag_mac = normalize_tag_mac(tag_mac)
-        owner = self._tag_owners.get(tag_mac)
-        if owner is None:
-            entity_registry = er.async_get(self.hass)
-            prefix = f"{tag_mac}_"
-            existing_owners = {
-                entity.config_entry_id
-                for entity in entity_registry.entities.values()
-                if entity.platform == DOMAIN
-                and entity.unique_id
-                and entity.unique_id.upper().startswith(prefix)
-                and entity.config_entry_id
-            }
-            owner = sorted(existing_owners)[0] if existing_owners else entry_id
-            self._tag_owners[tag_mac] = owner
-            _LOGGER.debug("Logical tag %s entity owner is %s", tag_mac, owner)
+        local_candidates = [
+            hub
+            for hub in self.hubs_for_tag(tag_mac)
+            if not self._tag_is_external(hub, tag_mac)
+        ]
+        if not local_candidates:
+            self._tag_owners.pop(tag_mac, None)
+            _LOGGER.debug(
+                "No local entity owner for tag %s; replicated records are ignored",
+                tag_mac,
+            )
+            return False
+
+        selected = max(
+            local_candidates,
+            key=lambda hub: (self._tag_last_seen(hub, tag_mac), hub.entry.entry_id),
+        )
+        owner = selected.entry.entry_id
+        previous_owner = self._tag_owners.get(tag_mac)
+        self._tag_owners[tag_mac] = owner
+
+        if previous_owner != owner:
+            self._migrate_tag_registry_owner(tag_mac, owner)
+            _LOGGER.info(
+                "Logical tag %s entity owner is local AP %s (entry %s)",
+                tag_mac,
+                selected.host,
+                owner,
+            )
         return owner == entry_id
+
+    def _migrate_tag_registry_owner(self, tag_mac: str, owner: str) -> None:
+        """Move existing tag registry records to the selected local AP entry."""
+        entity_registry = er.async_get(self.hass)
+        device_registry = dr.async_get(self.hass)
+        prefix = f"{tag_mac}_"
+        tag_entities = [
+            entity
+            for entity in entity_registry.entities.values()
+            if entity.platform == DOMAIN
+            and entity.unique_id
+            and entity.unique_id.upper().startswith(prefix)
+        ]
+        stale_owners = {
+            entity.config_entry_id
+            for entity in tag_entities
+            if entity.config_entry_id and entity.config_entry_id != owner
+        }
+        device_ids = {
+            entity.device_id for entity in tag_entities if entity.device_id
+        }
+
+        for entity in tag_entities:
+            if entity.config_entry_id != owner:
+                entity_registry.async_update_entity(
+                    entity.entity_id,
+                    config_entry_id=owner,
+                )
+
+        tag_device = device_registry.async_get_device(
+            identifiers={(DOMAIN, tag_mac)}
+        )
+        if tag_device is not None:
+            device_ids.add(tag_device.id)
+
+        for device_id in device_ids:
+            device = device_registry.async_get(device_id)
+            if device is None:
+                continue
+            if owner not in device.config_entries:
+                device_registry.async_update_device(
+                    device_id,
+                    add_config_entry_id=owner,
+                )
+            for stale_owner in stale_owners:
+                if stale_owner not in device.config_entries:
+                    continue
+                still_used = any(
+                    entity.device_id == device_id
+                    and entity.config_entry_id == stale_owner
+                    for entity in entity_registry.entities.values()
+                )
+                if not still_used:
+                    device_registry.async_update_device(
+                        device_id,
+                        remove_config_entry_id=stale_owner,
+                    )
 
     def resolve_ap_device(self, device_id: str) -> Hub:
         """Resolve a selected HA AP device to its exact hub."""

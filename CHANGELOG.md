@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.1.1](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.1.0...3.1.1) (2026-07-20)
+
+### Bug Fixes
+
+* hide displays that are reported exclusively as replicated remote records (`is_external: true`) from Home Assistant
+* keep replicated records internally available for diagnostics and routing without creating devices or entities
+* preserve one device and its existing entity IDs when a local display is also replicated by another AP
+* defer destructive registry cleanup until all enabled AP entries have loaded successfully
+
 ## [3.1.0](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.0.3...3.1.0) (2026-07-19)
 
 ### Features

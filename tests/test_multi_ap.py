@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -52,6 +52,16 @@ def test_tag_event_entities_are_disabled_by_default() -> None:
 @dataclass
 class FakeEntry:
     entry_id: str
+    data: dict = field(default_factory=dict)
+    disabled_by: str | None = None
+
+
+class FakeConfigEntries:
+    def __init__(self, entries: list[FakeEntry]) -> None:
+        self._entries = entries
+
+    def async_entries(self, _domain: str) -> list[FakeEntry]:
+        return self._entries
 
 
 class FakeHub:
@@ -94,8 +104,10 @@ class FakeHub:
 
 
 class FakeHass:
-    def __init__(self) -> None:
+    def __init__(self, entries: list[FakeEntry] | None = None) -> None:
         self.data = {}
+        if entries is not None:
+            self.config_entries = FakeConfigEntries(entries)
 
 
 def test_freshest_active_ap_is_selected() -> None:
@@ -227,6 +239,164 @@ def test_external_duplicate_cannot_own_tag_entities(monkeypatch) -> None:
     assert not manager.is_tag_entity_owner("entry-external", TAG)
 
 
+@pytest.mark.asyncio
+async def test_external_only_tag_removes_existing_registry_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry = FakeEntry("entry-external")
+    hass = FakeHass([entry])
+    manager = MultiHubManager(hass)
+    manager.register_hub(
+        FakeHub(
+            entry.entry_id,
+            "192.0.2.143",
+            last_seen=400,
+            is_external=True,
+        )
+    )
+    entity = SimpleNamespace(
+        entity_id="sensor.test_tag_battery",
+        platform="open_epaper_link",
+        unique_id=f"{TAG}_battery_percentage",
+    )
+    ap_entity = SimpleNamespace(
+        entity_id="sensor.open_epaper_link_ip",
+        platform="open_epaper_link",
+        unique_id="ap_ip",
+    )
+    entity_registry = SimpleNamespace(
+        entities={
+            entity.entity_id: entity,
+            ap_entity.entity_id: ap_entity,
+        },
+        async_remove=MagicMock(),
+    )
+    device = SimpleNamespace(
+        id="device-tag",
+        identifiers={("open_epaper_link", TAG)},
+    )
+    legacy_ap_device = SimpleNamespace(
+        id="device-legacy-ap",
+        identifiers={
+            ("open_epaper_link", "ap"),
+            ("foreign", "unexpected", "identifier", "shape"),
+        },
+    )
+    device_registry = SimpleNamespace(
+        devices={
+            device.id: device,
+            legacy_ap_device.id: legacy_ap_device,
+        },
+        async_get_device=lambda **kwargs: (
+            device
+            if kwargs.get("identifiers") == {("open_epaper_link", TAG)}
+            else None
+        ),
+        async_remove_device=MagicMock(),
+    )
+    monkeypatch.setattr(
+        "custom_components.open_epaper_link.hub_manager.er.async_get",
+        lambda _hass: entity_registry,
+    )
+    monkeypatch.setattr(
+        "custom_components.open_epaper_link.hub_manager.dr.async_get",
+        lambda _hass: device_registry,
+    )
+
+    assert await manager.async_reconcile_all_tag_visibility()
+    entity_registry.async_remove.assert_called_once_with(entity.entity_id)
+    device_registry.async_remove_device.assert_called_once_with(device.id)
+
+
+@pytest.mark.asyncio
+async def test_external_cleanup_waits_for_unloaded_ap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    external_entry = FakeEntry("entry-external")
+    local_entry = FakeEntry("entry-local")
+    hass = FakeHass([external_entry, local_entry])
+    manager = MultiHubManager(hass)
+    manager.register_hub(
+        FakeHub(
+            external_entry.entry_id,
+            "192.0.2.143",
+            last_seen=400,
+            is_external=True,
+        )
+    )
+    remove_registry_entries = MagicMock()
+    monkeypatch.setattr(
+        manager, "_remove_tag_registry_entries", remove_registry_entries
+    )
+
+    assert not await manager.async_reconcile_tag_visibility(TAG)
+    remove_registry_entries.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_tag_becomes_visible_when_local_ap_loads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    external_entry = FakeEntry("entry-external")
+    local_entry = FakeEntry("entry-local")
+    hass = FakeHass([external_entry, local_entry])
+    manager = MultiHubManager(hass)
+    manager.register_hub(
+        FakeHub(
+            external_entry.entry_id,
+            "192.0.2.143",
+            last_seen=400,
+            is_external=True,
+        )
+    )
+    assert not await manager.async_reconcile_tag_visibility(TAG)
+
+    local_hub = FakeHub(
+        local_entry.entry_id,
+        "192.0.2.166",
+        last_seen=300,
+        is_external=False,
+    )
+    manager.register_hub(local_hub)
+    migrate_owner = MagicMock()
+    dispatch = MagicMock()
+    monkeypatch.setattr(manager, "_migrate_tag_registry_owner", migrate_owner)
+    monkeypatch.setattr(hub_manager_module, "async_dispatcher_send", dispatch)
+
+    assert await manager.async_reconcile_tag_visibility(TAG)
+    assert manager.is_tag_entity_owner(local_entry.entry_id, TAG)
+    dispatch.assert_called_once_with(
+        hass, "open_epaper_link_tag_discovered", TAG
+    )
+
+
+@pytest.mark.asyncio
+async def test_local_tag_becoming_external_is_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry = FakeEntry("entry-local")
+    hass = FakeHass([entry])
+    manager = MultiHubManager(hass)
+    hub = FakeHub(
+        entry.entry_id,
+        "192.0.2.166",
+        last_seen=300,
+        is_external=False,
+    )
+    manager.register_hub(hub)
+    monkeypatch.setattr(manager, "_migrate_tag_registry_owner", MagicMock())
+    assert manager.is_tag_entity_owner(entry.entry_id, TAG)
+
+    hub._data[TAG]["is_external"] = True
+    remove_registry_entries = MagicMock()
+    monkeypatch.setattr(
+        manager, "_remove_tag_registry_entries", remove_registry_entries
+    )
+
+    assert not await manager.async_reconcile_tag_visibility(TAG)
+    remove_registry_entries.assert_called_once_with(TAG)
+
+
 def test_stale_entity_registry_owner_moves_to_local_ap(monkeypatch) -> None:
     hass = FakeHass()
     manager = MultiHubManager(hass)
@@ -286,6 +456,61 @@ def test_stale_entity_registry_owner_moves_to_local_ap(monkeypatch) -> None:
         ((device.id,), {"add_config_entry_id": "entry-local"}),
         ((device.id,), {"remove_config_entry_id": "entry-external"}),
     ]
+
+
+def test_stale_device_link_is_removed_when_entities_already_have_local_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = MultiHubManager(FakeHass())
+    external_hub = FakeHub(
+        "entry-external",
+        "192.0.2.143",
+        last_seen=400,
+        is_external=True,
+    )
+    local_hub = FakeHub(
+        "entry-local",
+        "192.0.2.166",
+        last_seen=300,
+        is_external=False,
+    )
+    entity = SimpleNamespace(
+        entity_id="sensor.test_tag_battery",
+        platform="open_epaper_link",
+        unique_id=f"{TAG}_battery_percentage",
+        config_entry_id="entry-local",
+        device_id="device-tag",
+    )
+    entity_registry = SimpleNamespace(
+        entities={entity.entity_id: entity},
+        async_update_entity=MagicMock(),
+    )
+    device = SimpleNamespace(
+        id="device-tag",
+        config_entries={"entry-external", "entry-local"},
+    )
+    device_registry = SimpleNamespace(
+        async_get=lambda device_id: device if device_id == device.id else None,
+        async_get_device=lambda **_kwargs: device,
+        async_update_device=MagicMock(),
+    )
+    monkeypatch.setattr(
+        "custom_components.open_epaper_link.hub_manager.er.async_get",
+        lambda _hass: entity_registry,
+    )
+    monkeypatch.setattr(
+        "custom_components.open_epaper_link.hub_manager.dr.async_get",
+        lambda _hass: device_registry,
+    )
+    manager.register_hub(external_hub)
+    manager.register_hub(local_hub)
+
+    assert manager.is_tag_entity_owner("entry-local", TAG)
+    entity_registry.async_update_entity.assert_not_called()
+    device_registry.async_update_device.assert_called_once_with(
+        device.id,
+        remove_config_entry_id="entry-external",
+    )
 
 
 def test_external_only_tag_fails_closed_for_write_routing() -> None:
@@ -524,6 +749,9 @@ async def test_button_and_nfc_events_update_stats_once_and_ignore_external_recor
     class FakeEventManager:
         async def async_record_tag_event(self, tag_mac, event_type, occurred_at):
             recorded.append((tag_mac, event_type, occurred_at))
+
+        def is_hub_registered(self, _entry_id):
+            return False
 
     monkeypatch.setattr(coordinator, "Store", FakeStore)
     monkeypatch.setattr(coordinator, "async_get_clientsession", lambda _hass: object())

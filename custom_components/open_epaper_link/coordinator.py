@@ -733,6 +733,10 @@ class Hub:
         # Fire state update event
         async_dispatcher_send(self.hass, f"{SIGNAL_TAG_UPDATE}_{tag_mac}")
 
+        manager = get_hub_manager(self.hass)
+        if manager.is_hub_registered(self.entry.entry_id):
+            await manager.async_reconcile_tag_visibility(tag_mac)
+
         if (
             not is_initial_load
             and is_new_reboot_event
@@ -1096,49 +1100,9 @@ class Hub:
             # Notify that this tag has been removed
             async_dispatcher_send(self.hass, f"{SIGNAL_TAG_UPDATE}_{tag_mac}")
 
-            # Preserve the logical HA device while another AP still exposes
-            # the same tag.
             manager = get_hub_manager(self.hass)
-            if manager.tag_exists_elsewhere(
-                tag_mac, exclude_entry_id=self.entry.entry_id
-            ):
-                _LOGGER.info(
-                    "Keeping logical tag %s because another AP still exposes it",
-                    tag_mac,
-                )
-                await self._store.async_save({"tags": self._data})
-                return
-
-            # Remove related devices and entities
-            device_registry = dr.async_get(self.hass)
-            entity_registry = er.async_get(self.hass)
-
-            # Find and remove entities for this tag
-            entities_to_remove = []
-            devices_to_remove = set()
-
-            for entity in entity_registry.entities.values():
-                if entity.config_entry_id == self.entry.entry_id:
-                    device = device_registry.async_get(entity.device_id) if entity.device_id else None
-                    if device:
-                        for identifier in device.identifiers:
-                            if identifier[0] == DOMAIN and identifier[1] == tag_mac:
-                                entities_to_remove.append(entity.entity_id)
-                                devices_to_remove.add(device.id)
-                                break
-
-            # Remove entities
-            for entity_id in entities_to_remove:
-                entity_registry.async_remove(entity_id)
-                _LOGGER.debug(f"Removed entity {entity_id} for deleted tag {tag_mac}")
-
-            # Remove devices
-            for device_id in devices_to_remove:
-                device_registry.async_remove_device(device_id)
-                _LOGGER.debug(f"Removed device {device_id} for deleted tag {tag_mac}")
-
-            # Update storage
             await self._store.async_save({"tags": self._data})
+            await manager.async_reconcile_tag_visibility(tag_mac)
 
     async def async_reload_blacklist(self) -> None:
         """Reload the tag blacklist from config entry options.
@@ -1156,10 +1120,12 @@ class Hub:
         self._blacklisted_tags = entry.options.get("blacklisted_tags", [])
 
         # Remove blacklisted tags from known tags and data
+        removed_tags = []
         for tag_mac in self._blacklisted_tags:
             if tag_mac in self._known_tags:
                 self._known_tags.remove(tag_mac)
                 self._data.pop(tag_mac, None)
+                removed_tags.append(tag_mac)
                 # Notify that this tag's state has changed
                 async_dispatcher_send(self.hass, f"{SIGNAL_TAG_UPDATE}_{tag_mac}")
 
@@ -1180,6 +1146,9 @@ class Hub:
             await self._store.async_save({
                 "tags": self._data
             })
+            manager = get_hub_manager(self.hass)
+            for tag_mac in removed_tags:
+                await manager.async_reconcile_tag_visibility(tag_mac)
 
     async def _handle_ap_config_message(self,dict) -> None:
         """Handle AP configuration updates.

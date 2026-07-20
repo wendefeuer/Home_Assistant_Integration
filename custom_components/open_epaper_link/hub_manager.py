@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Final
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
@@ -30,6 +31,14 @@ def normalize_tag_mac(tag_mac: str) -> str:
     return tag_mac.upper()
 
 
+def is_tag_identifier(identifier: str) -> bool:
+    """Return whether a registry identifier is an AP-connected tag MAC."""
+    normalized = normalize_tag_mac(identifier)
+    return len(normalized) == 16 and all(
+        character in "0123456789ABCDEF" for character in normalized
+    )
+
+
 def ap_identifier(entry_id: str) -> str:
     """Return the unique device-registry identifier for an AP config entry."""
     return f"{AP_IDENTIFIER_PREFIX}{entry_id}"
@@ -42,6 +51,8 @@ class MultiHubManager:
         self.hass = hass
         self._hubs: dict[str, Hub] = {}
         self._tag_owners: dict[str, str] = {}
+        self._visible_tags: set[str] = set()
+        self._hidden_external_tags: set[str] = set()
         self._tag_event_store: Store[dict[str, Any]] | None = None
         self._tag_event_stats: dict[str, dict[str, dict[str, Any]]] = {}
         self._tag_event_lock = asyncio.Lock()
@@ -135,6 +146,28 @@ class MultiHubManager:
                 entry_id,
             )
 
+    def is_hub_registered(self, entry_id: str) -> bool:
+        """Return whether an AP config entry currently has a runtime hub."""
+        return entry_id in self._hubs
+
+    def _all_enabled_ap_entries_loaded(self) -> bool:
+        """Return whether every enabled AP entry has a registered hub.
+
+        Cleanup must wait because an unavailable AP may own the local copy of
+        an otherwise external tag.
+        """
+        config_entries = getattr(self.hass, "config_entries", None)
+        if config_entries is None:
+            return False
+
+        configured_ap_entries = {
+            entry.entry_id
+            for entry in config_entries.async_entries(DOMAIN)
+            if entry.data.get("device_type") != "ble"
+            and entry.disabled_by is None
+        }
+        return configured_ap_entries.issubset(self._hubs)
+
     def get_hub_for_entry(self, entry_id: str) -> Hub:
         """Return the AP hub for an integration config entry."""
         hub = self._hubs.get(entry_id)
@@ -170,6 +203,19 @@ class MultiHubManager:
             not in {normalize_tag_mac(mac) for mac in hub.get_blacklisted_tags()}
         ]
 
+    def local_hubs_for_tag(self, tag_mac: str) -> list[Hub]:
+        """Return hubs that expose a local, non-replicated tag record."""
+        tag_mac = normalize_tag_mac(tag_mac)
+        return [
+            hub
+            for hub in self.hubs_for_tag(tag_mac)
+            if not self._tag_is_external(hub, tag_mac)
+        ]
+
+    def is_tag_visible(self, tag_mac: str) -> bool:
+        """Return whether a tag should be represented in Home Assistant."""
+        return bool(self.local_hubs_for_tag(tag_mac))
+
     def resolve_tag_hub(self, tag_mac: str, *, require_online: bool = True) -> Hub:
         """Resolve a logical tag to its active AP.
 
@@ -182,11 +228,7 @@ class MultiHubManager:
         """
         tag_mac = normalize_tag_mac(tag_mac)
         candidates = self.hubs_for_tag(tag_mac)
-        local_candidates = [
-            hub
-            for hub in candidates
-            if not self._tag_is_external(hub, tag_mac)
-        ]
+        local_candidates = self.local_hubs_for_tag(tag_mac)
         active = [
             hub
             for hub in local_candidates
@@ -278,11 +320,7 @@ class MultiHubManager:
         the freshest local owner while preserving entity IDs and unique IDs.
         """
         tag_mac = normalize_tag_mac(tag_mac)
-        local_candidates = [
-            hub
-            for hub in self.hubs_for_tag(tag_mac)
-            if not self._tag_is_external(hub, tag_mac)
-        ]
+        local_candidates = self.local_hubs_for_tag(tag_mac)
         if not local_candidates:
             self._tag_owners.pop(tag_mac, None)
             _LOGGER.debug(
@@ -298,6 +336,7 @@ class MultiHubManager:
         owner = selected.entry.entry_id
         previous_owner = self._tag_owners.get(tag_mac)
         self._tag_owners[tag_mac] = owner
+        self._visible_tags.add(tag_mac)
 
         if previous_owner != owner:
             self._migrate_tag_registry_owner(tag_mac, owner)
@@ -308,6 +347,99 @@ class MultiHubManager:
                 owner,
             )
         return owner == entry_id
+
+    async def async_reconcile_tag_visibility(self, tag_mac: str) -> bool:
+        """Reconcile one tag's HA registry state with all loaded AP records."""
+        tag_mac = normalize_tag_mac(tag_mac)
+        local_candidates = self.local_hubs_for_tag(tag_mac)
+        if local_candidates:
+            was_visible = tag_mac in self._visible_tags
+            self._hidden_external_tags.discard(tag_mac)
+            selected = max(
+                local_candidates,
+                key=lambda hub: (
+                    self._tag_last_seen(hub, tag_mac),
+                    hub.entry.entry_id,
+                ),
+            )
+            self.is_tag_entity_owner(selected.entry.entry_id, tag_mac)
+            if not was_visible:
+                _LOGGER.info(
+                    "Local tag %s became visible in Home Assistant", tag_mac
+                )
+                async_dispatcher_send(
+                    self.hass, f"{DOMAIN}_tag_discovered", tag_mac
+                )
+            return True
+
+        self._tag_owners.pop(tag_mac, None)
+        if not self._all_enabled_ap_entries_loaded():
+            _LOGGER.debug(
+                "Deferring cleanup for non-local tag %s until all AP entries load",
+                tag_mac,
+            )
+            return False
+
+        self._visible_tags.discard(tag_mac)
+        if tag_mac not in self._hidden_external_tags:
+            self._remove_tag_registry_entries(tag_mac)
+            self._hidden_external_tags.add(tag_mac)
+        return False
+
+    async def async_reconcile_all_tag_visibility(self) -> bool:
+        """Reconcile all runtime and registered tags after AP setup."""
+        if not self._all_enabled_ap_entries_loaded():
+            _LOGGER.debug(
+                "Deferring tag visibility reconciliation until all AP entries load"
+            )
+            return False
+
+        tag_macs = {
+            normalize_tag_mac(tag_mac)
+            for hub in self._hubs.values()
+            for tag_mac in hub.tags
+        }
+        device_registry = dr.async_get(self.hass)
+        tag_macs.update(
+            normalize_tag_mac(identifier[1])
+            for device in device_registry.devices.values()
+            for identifier in device.identifiers
+            if len(identifier) == 2
+            and identifier[0] == DOMAIN
+            and is_tag_identifier(identifier[1])
+        )
+
+        for tag_mac in sorted(tag_macs):
+            await self.async_reconcile_tag_visibility(tag_mac)
+        return True
+
+    def _remove_tag_registry_entries(self, tag_mac: str) -> None:
+        """Remove entities and device for a tag that has no local AP owner."""
+        entity_registry = er.async_get(self.hass)
+        device_registry = dr.async_get(self.hass)
+        prefix = f"{tag_mac}_"
+        entity_ids = [
+            entity.entity_id
+            for entity in entity_registry.entities.values()
+            if entity.platform == DOMAIN
+            and entity.unique_id
+            and entity.unique_id.upper().startswith(prefix)
+        ]
+        for entity_id in entity_ids:
+            entity_registry.async_remove(entity_id)
+
+        tag_device = device_registry.async_get_device(
+            identifiers={(DOMAIN, tag_mac)}
+        )
+        if tag_device is not None:
+            device_registry.async_remove_device(tag_device.id)
+
+        if entity_ids or tag_device is not None:
+            _LOGGER.info(
+                "Removed external-only tag %s from Home Assistant (%d entities)",
+                tag_mac,
+                len(entity_ids),
+            )
 
     def _migrate_tag_registry_owner(self, tag_mac: str, owner: str) -> None:
         """Move existing tag registry records to the selected local AP entry."""
@@ -347,12 +479,17 @@ class MultiHubManager:
             device = device_registry.async_get(device_id)
             if device is None:
                 continue
+            device_stale_owners = stale_owners | {
+                entry_id
+                for entry_id in device.config_entries
+                if entry_id in self._hubs and entry_id != owner
+            }
             if owner not in device.config_entries:
                 device_registry.async_update_device(
                     device_id,
                     add_config_entry_id=owner,
                 )
-            for stale_owner in stale_owners:
+            for stale_owner in device_stale_owners:
                 if stale_owner not in device.config_entries:
                     continue
                 still_used = any(

@@ -493,6 +493,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenEPaperLinkConfigEntr
             )
 
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        await hub_manager.async_reconcile_all_tag_visibility()
         await async_cleanup_legacy_ap_device(hass)
 
         async def start_websocket(_):

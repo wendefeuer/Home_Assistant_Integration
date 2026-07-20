@@ -14,11 +14,11 @@ Home Assistant Integration for the [OpenEPaperLink](https://github.com/jjwbruijn
 ## Multi-AP release / Multi-AP-Version
 
 > [!IMPORTANT]
-> **Create a Home Assistant backup and a separate copy of your existing `custom_components/open_epaper_link` folder before installation.** Version `3.1.0` is the stable Multi-AP release of this public fork and has not yet been merged into the upstream project.
+> **Create a Home Assistant backup and a separate copy of your existing `custom_components/open_epaper_link` folder before installation.** Version `3.1.1` is the stable Multi-AP release of this public fork and has not yet been merged into the upstream project.
 >
-> **Vor der Installation ein Home-Assistant-Backup und zusätzlich eine Kopie des vorhandenen Ordners `custom_components/open_epaper_link` erstellen.** Version `3.1.0` ist die stabile Multi-AP-Version dieses öffentlichen Forks und noch nicht in das Upstream-Projekt übernommen.
+> **Vor der Installation ein Home-Assistant-Backup und zusätzlich eine Kopie des vorhandenen Ordners `custom_components/open_epaper_link` erstellen.** Version `3.1.1` ist die stabile Multi-AP-Version dieses öffentlichen Forks und noch nicht in das Upstream-Projekt übernommen.
 
-Release version: [`3.1.0`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.0)
+Release version: [`3.1.1`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.1)
 
 Feedback and bug reports: [GitHub Issues in the fork](https://github.com/wendefeuer/Home_Assistant_Integration/issues/new/choose)
 
@@ -29,8 +29,8 @@ This release allows multiple OpenEPaperLink AP config entries in one Home Assist
 1. Create a full Home Assistant backup.
 2. Back up the existing `/config/custom_components/open_epaper_link` folder separately.
 3. Install the release using one of these methods:
-   - **HACS custom repository (recommended):** In HACS, open the three-dot menu, select **Custom repositories**, add `https://github.com/wendefeuer/Home_Assistant_Integration` as type **Integration**, then use **Download** or **Redownload**. Under **Need a different version?**, select `3.1.0` if necessary.
-   - **Manual:** Download the source archive from the [`3.1.0` release](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.0), extract it, and copy its `custom_components/open_epaper_link` folder to `/config/custom_components/open_epaper_link`, replacing the integration files.
+   - **HACS custom repository (recommended):** In HACS, open the three-dot menu, select **Custom repositories**, add `https://github.com/wendefeuer/Home_Assistant_Integration` as type **Integration**, then use **Download** or **Redownload**. Under **Need a different version?**, select `3.1.1` if necessary.
+   - **Manual:** Download the source archive from the [`3.1.1` release](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.1), extract it, and copy its `custom_components/open_epaper_link` folder to `/config/custom_components/open_epaper_link`, replacing the integration files.
 4. Restart Home Assistant. Do not edit files below `.storage`.
 5. Open **Settings → Devices & services → OpenEPaperLink** and add each AP separately. Existing AP entries can remain in place.
 6. Verify that every AP has its own device, shared tags appear only once, and a test action reaches the expected online AP.
@@ -46,8 +46,8 @@ Diese Version erlaubt mehrere OpenEPaperLink-AP-Konfigurationseinträge in einer
 1. Ein vollständiges Home-Assistant-Backup erstellen.
 2. Den vorhandenen Ordner `/config/custom_components/open_epaper_link` zusätzlich separat sichern.
 3. Die Version mit einer der folgenden Methoden installieren:
-   - **HACS Custom Repository (empfohlen):** In HACS das Drei-Punkte-Menü öffnen, **Benutzerdefinierte Repositories** auswählen, `https://github.com/wendefeuer/Home_Assistant_Integration` mit dem Typ **Integration** hinzufügen und anschließend **Herunterladen** oder **Erneut herunterladen** wählen. Unter **Andere Version benötigt?** bei Bedarf `3.1.0` auswählen.
-   - **Manuell:** Das Quellarchiv der [Version `3.1.0`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.0) herunterladen, entpacken und den enthaltenen Ordner `custom_components/open_epaper_link` nach `/config/custom_components/open_epaper_link` kopieren. Dabei die vorhandenen Integrationsdateien ersetzen.
+   - **HACS Custom Repository (empfohlen):** In HACS das Drei-Punkte-Menü öffnen, **Benutzerdefinierte Repositories** auswählen, `https://github.com/wendefeuer/Home_Assistant_Integration` mit dem Typ **Integration** hinzufügen und anschließend **Herunterladen** oder **Erneut herunterladen** wählen. Unter **Andere Version benötigt?** bei Bedarf `3.1.1` auswählen.
+   - **Manuell:** Das Quellarchiv der [Version `3.1.1`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.1) herunterladen, entpacken und den enthaltenen Ordner `custom_components/open_epaper_link` nach `/config/custom_components/open_epaper_link` kopieren. Dabei die vorhandenen Integrationsdateien ersetzen.
 4. Home Assistant neu starten. Keine Dateien unter `.storage` bearbeiten.
 5. Unter **Einstellungen → Geräte & Dienste → OpenEPaperLink** jeden AP einzeln hinzufügen. Vorhandene AP-Einträge können bestehen bleiben.
 6. Prüfen, ob jeder AP ein eigenes Gerät besitzt, gemeinsam sichtbare Tags nur einmal erscheinen und eine Testaktion den erwarteten erreichbaren AP erreicht.
@@ -62,8 +62,9 @@ Probleme bitte zentral im [Issue-Tracker des Forks](https://github.com/wendefeue
 - Multi-AP routing applies to AP-based tags. Existing BLE behavior is intentionally unchanged. / Das Multi-AP-Routing gilt für AP-basierte Tags. Das bestehende BLE-Verhalten bleibt absichtlich unverändert.
 - Write routing requires a local, non-replicated tag record and depends on AP connectivity. If several local APs qualify, the most recent tag `last_seen` data decides. / Schreibzugriffe benötigen einen lokalen, nicht replizierten Tag-Eintrag und hängen von der AP-Erreichbarkeit ab. Kommen mehrere lokale APs infrage, entscheiden die neuesten `last_seen`-Daten des Tags.
 - A tag shared by multiple APs is intentionally shown as one HA device and has no permanent parent-AP assignment. / Ein von mehreren APs erfasstes Tag wird absichtlich als ein HA-Gerät angezeigt und besitzt keine dauerhafte Zuordnung zu einem übergeordneten AP.
+- A display reported only as a replicated remote record (`is_external: true`) is intentionally hidden from Home Assistant. It appears automatically when any configured AP reports a local record. / Ein Display, das ausschließlich als replizierter Remote-Datensatz (`is_external: true`) gemeldet wird, bleibt in Home Assistant absichtlich ausgeblendet. Es erscheint automatisch, sobald ein eingerichteter AP einen lokalen Datensatz meldet.
 - An AP reboot can close the HTTP connection before returning a response; an accepted reboot request followed by that disconnect is treated as successful. / Ein AP-Neustart kann die HTTP-Verbindung schließen, bevor eine Antwort zurückkommt; eine zuvor angenommene Neustartanforderung wird in diesem Fall als erfolgreich behandelt.
-- Version `3.1.0` contains the Multi-AP implementation validated with two APs on Home Assistant Core 2026.7.2, including the local-versus-replicated routing fix. Other AP counts, firmware combinations, and HA versions have not been validated to the same extent. / Version `3.1.0` enthält die mit zwei APs unter Home Assistant Core 2026.7.2 geprüfte Multi-AP-Implementierung einschließlich der Korrektur für lokale und replizierte Tag-Einträge. Andere AP-Anzahlen, Firmwarekombinationen und HA-Versionen wurden noch nicht im gleichen Umfang validiert.
+- Version `3.1.1` contains the Multi-AP implementation validated with two APs on Home Assistant Core 2026.7.2, including the local-versus-replicated routing and visibility fixes. Other AP counts, firmware combinations, and HA versions have not been validated to the same extent. / Version `3.1.1` enthält die mit zwei APs unter Home Assistant Core 2026.7.2 geprüfte Multi-AP-Implementierung einschließlich der Korrekturen für Routing und Sichtbarkeit lokaler und replizierter Tag-Einträge. Andere AP-Anzahlen, Firmwarekombinationen und HA-Versionen wurden noch nicht im gleichen Umfang validiert.
 
 ## Requirements
 

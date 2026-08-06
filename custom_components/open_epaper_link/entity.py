@@ -46,6 +46,7 @@ class OpenEPaperLinkAPEntity(Entity):
             name=f"OpenEPaperLink AP ({self._hub.host})",
             model=self._hub.ap_model,
             manufacturer="OpenEPaperLink",
+            sw_version=self._hub.ap_build_version,
             configuration_url=f"http://{self._hub.host}"
         )
 

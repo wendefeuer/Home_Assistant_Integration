@@ -14,11 +14,11 @@ Home Assistant Integration for the [OpenEPaperLink](https://github.com/jjwbruijn
 ## Multi-AP release / Multi-AP-Version
 
 > [!IMPORTANT]
-> **Create a Home Assistant backup and a separate copy of your existing `custom_components/open_epaper_link` folder before installation.** Version `3.1.1` is the stable Multi-AP release of this public fork and has not yet been merged into the upstream project.
+> **Create a Home Assistant backup and a separate copy of your existing `custom_components/open_epaper_link` folder before installation.** Version `3.2.0` is the stable Multi-AP release of this public fork and has not yet been merged into the upstream project.
 >
-> **Vor der Installation ein Home-Assistant-Backup und zusätzlich eine Kopie des vorhandenen Ordners `custom_components/open_epaper_link` erstellen.** Version `3.1.1` ist die stabile Multi-AP-Version dieses öffentlichen Forks und noch nicht in das Upstream-Projekt übernommen.
+> **Vor der Installation ein Home-Assistant-Backup und zusätzlich eine Kopie des vorhandenen Ordners `custom_components/open_epaper_link` erstellen.** Version `3.2.0` ist die stabile Multi-AP-Version dieses öffentlichen Forks und noch nicht in das Upstream-Projekt übernommen.
 
-Release version: [`3.1.1`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.1)
+Release version: [`3.2.0`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.2.0)
 
 Feedback and bug reports: [GitHub Issues in the fork](https://github.com/wendefeuer/Home_Assistant_Integration/issues/new/choose)
 
@@ -29,8 +29,8 @@ This release allows multiple OpenEPaperLink AP config entries in one Home Assist
 1. Create a full Home Assistant backup.
 2. Back up the existing `/config/custom_components/open_epaper_link` folder separately.
 3. Install the release using one of these methods:
-   - **HACS custom repository (recommended):** In HACS, open the three-dot menu, select **Custom repositories**, add `https://github.com/wendefeuer/Home_Assistant_Integration` as type **Integration**, then use **Download** or **Redownload**. Under **Need a different version?**, select `3.1.1` if necessary.
-   - **Manual:** Download the source archive from the [`3.1.1` release](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.1), extract it, and copy its `custom_components/open_epaper_link` folder to `/config/custom_components/open_epaper_link`, replacing the integration files.
+   - **HACS custom repository (recommended):** In HACS, open the three-dot menu, select **Custom repositories**, add `https://github.com/wendefeuer/Home_Assistant_Integration` as type **Integration**, then use **Download** or **Redownload**. Under **Need a different version?**, select `3.2.0` if necessary.
+   - **Manual:** Download the source archive from the [`3.2.0` release](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.2.0), extract it, and copy its `custom_components/open_epaper_link` folder to `/config/custom_components/open_epaper_link`, replacing the integration files.
 4. Restart Home Assistant. Do not edit files below `.storage`.
 5. Open **Settings → Devices & services → OpenEPaperLink** and add each AP separately. Existing AP entries can remain in place.
 6. Verify that every AP has its own device, shared tags appear only once, and a test action reaches the expected online AP.
@@ -46,8 +46,8 @@ Diese Version erlaubt mehrere OpenEPaperLink-AP-Konfigurationseinträge in einer
 1. Ein vollständiges Home-Assistant-Backup erstellen.
 2. Den vorhandenen Ordner `/config/custom_components/open_epaper_link` zusätzlich separat sichern.
 3. Die Version mit einer der folgenden Methoden installieren:
-   - **HACS Custom Repository (empfohlen):** In HACS das Drei-Punkte-Menü öffnen, **Benutzerdefinierte Repositories** auswählen, `https://github.com/wendefeuer/Home_Assistant_Integration` mit dem Typ **Integration** hinzufügen und anschließend **Herunterladen** oder **Erneut herunterladen** wählen. Unter **Andere Version benötigt?** bei Bedarf `3.1.1` auswählen.
-   - **Manuell:** Das Quellarchiv der [Version `3.1.1`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.1.1) herunterladen, entpacken und den enthaltenen Ordner `custom_components/open_epaper_link` nach `/config/custom_components/open_epaper_link` kopieren. Dabei die vorhandenen Integrationsdateien ersetzen.
+   - **HACS Custom Repository (empfohlen):** In HACS das Drei-Punkte-Menü öffnen, **Benutzerdefinierte Repositories** auswählen, `https://github.com/wendefeuer/Home_Assistant_Integration` mit dem Typ **Integration** hinzufügen und anschließend **Herunterladen** oder **Erneut herunterladen** wählen. Unter **Andere Version benötigt?** bei Bedarf `3.2.0` auswählen.
+   - **Manuell:** Das Quellarchiv der [Version `3.2.0`](https://github.com/wendefeuer/Home_Assistant_Integration/releases/tag/3.2.0) herunterladen, entpacken und den enthaltenen Ordner `custom_components/open_epaper_link` nach `/config/custom_components/open_epaper_link` kopieren. Dabei die vorhandenen Integrationsdateien ersetzen.
 4. Home Assistant neu starten. Keine Dateien unter `.storage` bearbeiten.
 5. Unter **Einstellungen → Geräte & Dienste → OpenEPaperLink** jeden AP einzeln hinzufügen. Vorhandene AP-Einträge können bestehen bleiben.
 6. Prüfen, ob jeder AP ein eigenes Gerät besitzt, gemeinsam sichtbare Tags nur einmal erscheinen und eine Testaktion den erwarteten erreichbaren AP erreicht.
@@ -64,7 +64,7 @@ Probleme bitte zentral im [Issue-Tracker des Forks](https://github.com/wendefeue
 - A tag shared by multiple APs is intentionally shown as one HA device and has no permanent parent-AP assignment. / Ein von mehreren APs erfasstes Tag wird absichtlich als ein HA-Gerät angezeigt und besitzt keine dauerhafte Zuordnung zu einem übergeordneten AP.
 - A display reported only as a replicated remote record (`is_external: true`) is intentionally hidden from Home Assistant. It appears automatically when any configured AP reports a local record. / Ein Display, das ausschließlich als replizierter Remote-Datensatz (`is_external: true`) gemeldet wird, bleibt in Home Assistant absichtlich ausgeblendet. Es erscheint automatisch, sobald ein eingerichteter AP einen lokalen Datensatz meldet.
 - An AP reboot can close the HTTP connection before returning a response; an accepted reboot request followed by that disconnect is treated as successful. / Ein AP-Neustart kann die HTTP-Verbindung schließen, bevor eine Antwort zurückkommt; eine zuvor angenommene Neustartanforderung wird in diesem Fall als erfolgreich behandelt.
-- Version `3.1.1` contains the Multi-AP implementation validated with two APs on Home Assistant Core 2026.7.2, including the local-versus-replicated routing and visibility fixes. Other AP counts, firmware combinations, and HA versions have not been validated to the same extent. / Version `3.1.1` enthält die mit zwei APs unter Home Assistant Core 2026.7.2 geprüfte Multi-AP-Implementierung einschließlich der Korrekturen für Routing und Sichtbarkeit lokaler und replizierter Tag-Einträge. Andere AP-Anzahlen, Firmwarekombinationen und HA-Versionen wurden noch nicht im gleichen Umfang validiert.
+- Version `3.2.0` contains the Multi-AP implementation and AP firmware-status entities validated with two Yellow APs on Home Assistant Core 2026.7.4. Other AP counts, hardware environments, firmware repositories, and HA versions have not been validated to the same extent. / Version `3.2.0` enthält die mit zwei Yellow APs unter Home Assistant Core 2026.7.4 geprüfte Multi-AP-Implementierung und die AP-Firmwarestatus-Entitäten. Andere AP-Anzahlen, Hardwareumgebungen, Firmware-Repositories und HA-Versionen wurden noch nicht im gleichen Umfang validiert.
 
 ## Requirements
 
@@ -96,6 +96,16 @@ Probleme bitte zentral im [Issue-Tracker des Forks](https://github.com/wendefeue
 ### ⚙️ Configuration Controls
 - AP settings management (WiFi, Bluetooth, language, etc.)
 - Tag inventory and blacklist management
+
+### ⬆️ AP firmware status / AP-Firmwarestatus
+
+Each configured AP provides a native Home Assistant **Firmware** update entity. It displays the firmware installed on that AP, the latest compatible stable release from its configured GitHub repository, whether an update is available, and a link to the matching GitHub release. The installed firmware is also shown as the AP device's software version. Release checks are shared per repository and cached for six hours.
+
+The entity is deliberately read-only: it never flashes the AP and does not expose an install button. Because it cannot install an update, it is not normally shown in Home Assistant's central update overview. It remains available on the AP device page, under **Settings → Devices & services → Entities**, and for dashboard cards. Its native state is `on` when an update is available, `off` when the AP is current, and `unknown` when GitHub cannot be checked safely or the release has no binary matching the AP environment.
+
+Jeder konfigurierte AP stellt eine native Home-Assistant-Update-Entität **Firmware** bereit. Sie zeigt die auf diesem AP installierte Firmware, die neueste kompatible stabile Version aus dem am AP konfigurierten GitHub-Repository, den Updatezustand und einen Link zum passenden GitHub-Release. Die installierte Firmware erscheint zusätzlich als Softwareversion des AP-Geräts. Release-Abfragen werden je Repository gemeinsam genutzt und sechs Stunden zwischengespeichert.
+
+Die Entität ist bewusst read-only: Sie flasht den AP niemals und bietet keine Installationsschaltfläche an. Da sie kein Update installieren kann, erscheint sie normalerweise nicht in der zentralen Home-Assistant-Updateübersicht. Sie bleibt auf der AP-Geräteseite, unter **Einstellungen → Geräte & Dienste → Entitäten** und für Dashboard-Karten verfügbar. Der native Zustand ist `on` bei „Update verfügbar“, `off` bei „aktuell“ und `unknown`, wenn GitHub nicht sicher geprüft werden konnte oder das Release kein zur AP-Umgebung passendes Binary enthält.
 
 ### 🔘 Button and NFC events / Button- und NFC-Ereignisse
 

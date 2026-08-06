@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.2.0](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.1.1...3.2.0) (2026-08-06)
+
+### Features
+
+* add one native, read-only Home Assistant **Firmware** update entity per OpenEPaperLink AP ([#2](https://github.com/wendefeuer/Home_Assistant_Integration/issues/2))
+* show the installed AP firmware, latest compatible stable release, update status, and matching GitHub release link
+* expose the installed AP firmware as the Home Assistant device software version
+* honor each AP's configured GitHub repository and cache release checks per repository for six hours
+* treat GitHub failures, rate limits, invalid repositories, and releases without a matching AP firmware binary as unknown instead of falsely reporting the AP as current
+* compare development builds by build and release timestamps so newer custom builds are not incorrectly marked outdated
+
+### Upgrade Notes / Hinweise zum Update
+
+* Restart Home Assistant once after installing this version so the new `update` platform is loaded. / Home Assistant nach der Installation einmal neu starten, damit die neue `update`-Plattform geladen wird.
+* The **Firmware** entity is deliberately informational only: it does not flash the AP and has no install button. / Die Entität **Firmware** dient bewusst nur zur Information: Sie flasht den AP nicht und besitzt keine Installationsschaltfläche.
+* Read-only update entities are available on the AP device page, in the entity list, and for dashboard cards, but are not normally listed in Home Assistant's central update overview. / Read-only-Update-Entitäten sind am AP-Gerät, in der Entitätsliste und für Dashboard-Karten verfügbar, erscheinen aber normalerweise nicht in der zentralen Home-Assistant-Updateübersicht.
+* `on` means an update is available, `off` means the installed version is current, and `unknown` means no safe comparison was possible. / `on` bedeutet „Update verfügbar“, `off` bedeutet „aktuell“ und `unknown`, dass kein sicherer Vergleich möglich war.
+
 ## [3.1.1](https://github.com/wendefeuer/Home_Assistant_Integration/compare/3.1.0...3.1.1) (2026-07-20)
 
 ### Bug Fixes

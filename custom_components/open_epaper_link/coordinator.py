@@ -111,6 +111,9 @@ class Hub:
         self._last_record_count = None
         self.ap_env = None
         self.ap_model = "ESP32"
+        self.ap_build_version: str | None = None
+        self.ap_build_time: datetime | None = None
+        self.ap_build_sha: str | None = None
 
         self._unsub_callbacks: list[CALLBACK_TYPE] = []
         self.online = False
@@ -1477,6 +1480,23 @@ class Hub:
                 data = await response.json()
                 self.ap_env = data.get("env")
                 self.ap_model = self._format_ap_model(self.ap_env)
+                build_version = data.get("buildversion")
+                self.ap_build_version = (
+                    str(build_version) if build_version not in (None, "") else None
+                )
+                self.ap_build_sha = data.get("sha") or None
+                self.ap_build_time = self._parse_ap_build_time(data.get("buildtime"))
+
+    @staticmethod
+    def _parse_ap_build_time(value: Any) -> datetime | None:
+        """Convert an AP build timestamp to an aware UTC datetime."""
+        try:
+            timestamp = float(value)
+            if timestamp <= 0:
+                return None
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        except (TypeError, ValueError, OSError, OverflowError):
+            return None
 
     @staticmethod
     def _format_ap_model(ap_env: str) -> str:

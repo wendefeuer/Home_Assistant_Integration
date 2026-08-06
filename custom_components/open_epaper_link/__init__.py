@@ -30,6 +30,7 @@ PLATFORMS = [
     Platform.SELECT,
     Platform.SWITCH,
     Platform.TEXT,
+    Platform.UPDATE,
 ]
 
 # BLE devices use a subset of platforms
